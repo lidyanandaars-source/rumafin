@@ -1,0 +1,24 @@
+import { useEffect, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { LogOut, ShieldCheck, Database, Bot, History } from 'lucide-react'
+import { useHousehold } from '@/hooks/useHousehold'
+import { useAuth } from '@/features/auth/AuthProvider'
+import { requireSupabase } from '@/lib/supabase'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { Select } from '@/components/ui/select'
+import { Badge } from '@/components/ui/badge'
+
+export function SettingsPage(){
+  const{householdId,household,role}=useHousehold();const{user}=useAuth();const qc=useQueryClient();const[voiceRetention,setVoiceRetention]=useState('NEVER');const[receiptRetention,setReceiptRetention]=useState('KEEP');const[saving,setSaving]=useState(false)
+  const pref=useQuery({queryKey:['preferences',user?.id],queryFn:async()=>{const{data,error}=await requireSupabase().from('user_preferences').select('*').eq('user_id',user!.id).maybeSingle();if(error)throw error;return data},enabled:Boolean(user)})
+  useEffect(()=>{if(pref.data){setVoiceRetention(pref.data.voice_retention??'NEVER');setReceiptRetention(pref.data.receipt_retention??'KEEP')}},[pref.data])
+  const audit=useQuery({queryKey:['audit',householdId],queryFn:async()=>{const{data,error}=await requireSupabase().from('audit_logs').select('id,action,entity_type,entity_id,source,created_at').eq('household_id',householdId!).order('created_at',{ascending:false}).limit(20);if(error)throw error;return data??[]},enabled:Boolean(householdId)})
+  async function savePrivacy(){setSaving(true);try{const{error}=await requireSupabase().from('user_preferences').upsert({user_id:user!.id,voice_retention:voiceRetention,receipt_retention:receiptRetention},{onConflict:'user_id'});if(error)throw error;await qc.invalidateQueries({queryKey:['preferences']})}finally{setSaving(false)}}
+  async function signOut(){await requireSupabase().auth.signOut()}
+  return <main className="page"><div><h1 className="page-title">Pengaturan</h1><p className="page-subtitle">Privasi, household, audit, dan sesi.</p></div><div className="mt-6 grid gap-4 xl:grid-cols-2">
+    <Card><CardHeader><div className="flex items-center gap-2"><ShieldCheck className="h-5 w-5"/><h2 className="font-bold">Privasi AI</h2></div><p className="text-xs text-slate-500">API key Groq/Gemini tidak pernah ditempatkan di browser.</p></CardHeader><CardContent className="space-y-4"><label><span className="field-label">Simpan rekaman voice</span><Select value={voiceRetention} onChange={e=>setVoiceRetention(e.target.value)}><option value="NEVER">Never (default)</option><option value="24_HOURS">24 hours</option><option value="ALWAYS">Always</option></Select></label><label><span className="field-label">Receipt original</span><Select value={receiptRetention} onChange={e=>setReceiptRetention(e.target.value)}><option value="KEEP">Keep original</option><option value="DELETE_AFTER_EXTRACTION">Delete after extraction</option></Select></label><Button onClick={savePrivacy} disabled={saving}>{saving?'Menyimpan…':'Simpan preferensi'}</Button></CardContent></Card>
+    <Card><CardHeader><div className="flex items-center gap-2"><Database className="h-5 w-5"/><h2 className="font-bold">Household & akun</h2></div></CardHeader><CardContent className="space-y-3 text-sm"><div className="flex justify-between gap-4"><span className="text-slate-500">Household</span><strong>{household?.name}</strong></div><div className="flex justify-between gap-4"><span className="text-slate-500">Role</span><Badge>{role}</Badge></div><div className="flex justify-between gap-4"><span className="text-slate-500">Currency</span><strong>{household?.default_currency}</strong></div><div className="flex justify-between gap-4"><span className="text-slate-500">Timezone</span><strong>{household?.timezone}</strong></div><div className="flex justify-between gap-4"><span className="text-slate-500">Email</span><strong className="truncate">{user?.email}</strong></div><Button variant="outline" onClick={signOut}><LogOut className="h-4 w-4"/>Logout</Button></CardContent></Card>
+    <Card className="xl:col-span-2"><CardHeader><div className="flex items-center gap-2"><History className="h-5 w-5"/><h2 className="font-bold">Audit log terbaru</h2></div><p className="text-xs text-slate-500">Aksi sensitif disimpan bersama sumber MANUAL / VOICE / RECEIPT.</p></CardHeader><CardContent><div className="divide-y divide-slate-100">{audit.data?.map(a=><div key={a.id} className="flex flex-wrap items-center gap-3 py-3 text-sm"><Bot className="h-4 w-4 text-slate-400"/><strong>{a.action}</strong><span className="text-slate-400">{a.entity_type}</span><Badge>{a.source}</Badge><span className="ml-auto text-xs text-slate-400">{new Date(a.created_at).toLocaleString('id-ID')}</span></div>)}</div></CardContent></Card>
+  </div></main>
+}

@@ -1,0 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: #0f172a;
+  background: #f8fafc;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* { box-sizing: border-box; }
+html { background: #f8fafc; }
+body { margin: 0; min-width: 320px; min-height: 100vh; background: #f8fafc; }
+button, input, select, textarea { font: inherit; }
+button { -webkit-tap-highlight-color: transparent; }
+
+.safe-bottom { padding-bottom: max(1rem, env(safe-area-inset-bottom)); }
+.safe-top { padding-top: max(0px, env(safe-area-inset-top)); }
+
+@layer components {
+  .page { @apply mx-auto w-full max-w-7xl px-4 pb-28 pt-5 md:px-6 md:pb-10 md:pt-7; }
+  .page-title { @apply text-2xl font-bold tracking-tight text-slate-950 md:text-3xl; }
+  .page-subtitle { @apply mt-1 text-sm text-slate-500 md:text-base; }
+  .field-label { @apply mb-1.5 block text-sm font-medium text-slate-700; }
+  .focus-ring { @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-900 focus-visible:ring-offset-2; }
+}

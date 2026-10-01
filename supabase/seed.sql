@@ -1,0 +1,3 @@
+-- Intentionally minimal.
+-- User-specific demo data is created through create_household_with_defaults() after authentication,
+-- so local resets never create orphan financial records that bypass ownership rules.
