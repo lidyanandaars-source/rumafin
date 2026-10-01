@@ -1,6 +1,6 @@
 import { requireSupabase } from './supabase'
 
-export async function invokeEdge<T>(name: string, body?: unknown, options?: { headers?: Record<string, string> }) {
+export async function invokeEdge<T>(name: string, body?: Record<string, unknown>, options?: { headers?: Record<string, string> }) {
   const client = requireSupabase()
   const { data, error } = await client.functions.invoke<T>(name, {
     body,
