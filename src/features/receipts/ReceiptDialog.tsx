@@ -14,11 +14,30 @@ import { listCategories } from '@/services/categories'
 import type { ReceiptExtraction } from '@/types/domain'
 import { formatCurrency } from '@/utils/currency'
 
+interface ReceiptDuplicateCandidate {
+  id: string
+  merchant_name: string | null
+  description: string | null
+  total_amount: number
+  transaction_at: string
+}
+
 interface ExtractionResult extends ReceiptExtraction {
-  suggested_account_id?: string | null
-  suggested_category_id?: string | null
-  manual_entry_required?: boolean
-  ai?: { provider?: string | null; model?: string | null }
+  receipt_id: string
+  storage_path: string
+  overall_confidence: number
+  needs_review: boolean
+  manual_entry_required: boolean
+  arithmetic_issue: boolean
+  duplicate_candidates: ReceiptDuplicateCandidate[]
+  suggested_account_id: string | null
+  suggested_category_id: string | null
+  ai?: {
+    provider?: string | null
+    model?: string | null
+    routing?: string[]
+    failures?: string[]
+  }
 }
 
 async function optimizeReceiptFile(file: File): Promise<File> {
