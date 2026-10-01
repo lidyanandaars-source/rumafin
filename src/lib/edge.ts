@@ -9,7 +9,9 @@ export async function invokeEdge<T>(
 ) {
   const client = requireSupabase()
   const { data, error } = await client.functions.invoke<T>(name, {
-    body,
+    // Supabase FunctionsHttpErrorOptions does not accept null for body.
+    // Keep invokeEdge(null) backward-compatible by normalizing null to undefined.
+    body: body ?? undefined,
     headers: options?.headers,
   })
 
