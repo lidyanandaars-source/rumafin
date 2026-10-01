@@ -9,7 +9,7 @@ Deno.serve(async(req)=>{
     if(!(file instanceof File))throw new Error('Audio file is required');if(!householdId)throw new Error('household_id is required')
     await requireHouseholdAccess(admin,authUser.id,householdId,true)
     if(file.size>25*1024*1024)throw new Error('Audio exceeds 25 MB limit')
-    const allowed=['audio/webm','audio/wav','audio/mpeg','audio/mp4','audio/ogg','audio/flac','video/webm'];if(file.type&&!allowed.includes(file.type))throw new Error('Unsupported audio format')
+    const mimeType=(file.type||'').split(';')[0].trim().toLowerCase();const allowed=['audio/webm','audio/wav','audio/mpeg','audio/mp4','audio/ogg','audio/flac','video/webm'];if(mimeType&&!allowed.includes(mimeType))throw new Error(`Unsupported audio format: ${file.type}`)
     const key=Deno.env.get('GROQ_API_KEY');if(!key)throw new Error('GROQ_API_KEY is not configured')
     const primary=Deno.env.get('GROQ_TRANSCRIPTION_MODEL')??'whisper-large-v3-turbo';const fallback=Deno.env.get('GROQ_TRANSCRIPTION_FALLBACK_MODEL')??'whisper-large-v3'
     async function call(model:string){const body=new FormData();body.append('file',file,file.name||'voice.webm');body.append('model',model);body.append('response_format','json');body.append('language','id');body.append('temperature','0');const r=await fetch('https://api.groq.com/openai/v1/audio/transcriptions',{method:'POST',headers:{Authorization:`Bearer ${key}`},body});if(!r.ok)throw new Error(`Groq transcription ${r.status}: ${(await r.text()).slice(0,300)}`);return await r.json()}

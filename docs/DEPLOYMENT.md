@@ -18,7 +18,7 @@ npx supabase functions deploy financial-query
 npx supabase functions deploy invite-member
 ```
 
-Set Edge Function secrets using `supabase secrets set`. Enable Google Auth only if required and register the exact production redirect URL.
+Set Edge Function secrets using `supabase secrets set`. Authentication uses Supabase email/password and magic link; Google OAuth is not required.
 
 ## 2. Cloudflare
 

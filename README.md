@@ -15,7 +15,7 @@ Core rule: **AI interprets → application validates → database calculates →
 
 ## Implemented MVP
 
-Authentication (email/password, magic link, optional Google), household onboarding, roles, accounts, customizable categories/subcategories, expense/income/transfer, multi-category split transactions, atomic account movements, soft delete/restore, search/filter foundation, dashboard with budget progress, DB-calculated reports with date/account/category/member/merchant/type filters, budgets, voice CREATE/UPDATE/DELETE with candidate confirmation, receipt upload/extraction/review, receipt item split when arithmetic is consistent, duplicate detection, private storage, audit logs, PWA, offline manual drafts, privacy retention preferences, member invitations, rate limiting, idempotency, and AI prompt/model logging.
+Authentication (email/password and magic link), household onboarding, roles, accounts, customizable categories/subcategories, expense/income/transfer, multi-category split transactions, atomic account movements, soft delete/restore, search/filter foundation, dashboard with budget progress, DB-calculated reports with date/account/category/member/merchant/type filters, budgets, voice CREATE/UPDATE/DELETE with candidate confirmation, receipt upload/extraction/review, receipt item split when arithmetic is consistent, duplicate detection, private storage, audit logs, PWA, offline manual drafts, privacy retention preferences, member invitations, rate limiting, idempotency, and AI prompt/model logging.
 
 ## Local setup
 

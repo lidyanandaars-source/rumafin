@@ -50,11 +50,6 @@ export function LoginPage() {
     finally { setBusy(false) }
   }
 
-  async function googleLogin() {
-    setBusy(true); setError(null)
-    const { error: authError } = await requireSupabase().auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } })
-    if (authError) { setError(authError.message); setBusy(false) }
-  }
 
   return (
     <main className="min-h-screen bg-slate-100 lg:grid lg:grid-cols-2">
@@ -76,7 +71,7 @@ export function LoginPage() {
             <Button className="w-full" size="lg" disabled={busy}>{busy ? 'Memproses…' : mode === 'signin' ? 'Masuk' : 'Daftar'}</Button>
           </form>
           <div className="my-5 flex items-center gap-3 text-xs text-slate-400"><span className="h-px flex-1 bg-slate-200"/>atau<span className="h-px flex-1 bg-slate-200"/></div>
-          <div className="space-y-2"><Button variant="outline" className="w-full" type="button" onClick={sendMagicLink} disabled={busy}>Kirim magic link</Button><button type="button" className="w-full py-1 text-sm font-medium text-slate-500 hover:text-slate-950" onClick={forgotPassword}>Lupa password?</button><Button variant="outline" className="w-full" type="button" onClick={googleLogin} disabled={busy}>Lanjut dengan Google</Button></div>
+          <div className="space-y-2"><Button variant="outline" className="w-full" type="button" onClick={sendMagicLink} disabled={busy}>Kirim magic link</Button><button type="button" className="w-full py-1 text-sm font-medium text-slate-500 hover:text-slate-950" onClick={forgotPassword}>Lupa password?</button></div>
           <button className="mt-6 w-full text-sm font-medium text-slate-600 hover:text-slate-950" onClick={() => { setMode(mode === 'signin' ? 'signup' : 'signin'); setError(null); setMessage(null) }}>{mode === 'signin' ? 'Belum punya akun? Daftar' : 'Sudah punya akun? Masuk'}</button>
         </div>
       </section>
