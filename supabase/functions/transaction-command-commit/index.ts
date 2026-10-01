@@ -1,6 +1,7 @@
 import { corsHeaders, handleError, json } from '../_shared/http.ts'
 import { rateLimit, requireHouseholdAccess, requireUser } from '../_shared/supabase.ts'
 import { buildPreview } from '../_shared/preview.ts'
+import { normalizeFinancialCandidate, validateFinancialCandidate } from '../_shared/financial-command.ts'
 
 function n(v: any) {
   return v == null ? null : Number(v)
@@ -56,8 +57,20 @@ Deno.serve(async (req) => {
       })
     }
 
-    const command = row.parsed_payload
+    if (!['PARSED', 'AWAITING_CONFIRMATION'].includes(row.status)) {
+      throw new Error(`Voice command cannot be executed from status ${row.status}.`)
+    }
+
+    const command = normalizeFinancialCandidate(row.parsed_payload, row.transcript)
+    validateFinancialCandidate(command, row.transcript)
     const preview = await buildPreview(admin, householdId, command)
+
+    if (preview.can_commit === false) {
+      const issues = Array.isArray(preview.blocking_issues) && preview.blocking_issues.length
+        ? `: ${preview.blocking_issues.join(', ')}`
+        : ''
+      throw new Error(`Command is incomplete and cannot be executed${issues}.`)
+    }
 
     let expectedConfirmationPhrase: string | null = preview.confirmation_phrase ?? null
     if (preview.requires_typed_confirmation && !expectedConfirmationPhrase && ['DELETE_ACCOUNT_CASCADE', 'RESET_ACCOUNT'].includes(command.intent)) {

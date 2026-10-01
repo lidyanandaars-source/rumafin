@@ -1,4 +1,4 @@
-# Voice Superpower v4
+# Voice Superpower v6
 
 RumaFin voice remains an interpretation layer. It never receives SQL authority. Every command is parsed into a strict JSON allow-list, previewed, role-checked, confirmed, and committed through server-side rules/RPCs.
 
@@ -54,8 +54,11 @@ Critical examples:
 ## AI routing
 
 1. Gemini 3.8 Flash
-2. Groq `openai/gpt-oss-20b`
-3. Gemini 3.5 Flash
-4. Gemini 3.5 Flash-Lite
+2. Groq `openai/gpt-oss-120b`
+3. Groq `openai/gpt-oss-20b`
+4. Gemini 3.5 Flash
+5. Gemini 3.5 Flash-Lite
+
+Every candidate is semantically validated against the transcript before the router stops. Explicit commands such as `buat akun` cannot be accepted as `CREATE_TRANSACTION`.
 
 If all models fail, no financial mutation is executed.

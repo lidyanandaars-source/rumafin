@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { Home, List, Plus, BarChart3, Settings, WalletCards, Mic, ReceiptText, PenLine, Landmark, Tags, Target, Users, ChevronDown } from 'lucide-react'
+import { Home, List, Plus, BarChart3, Settings, WalletCards, Mic, ReceiptText, PenLine, Landmark, Tags, Target, Users, ChevronDown, LogOut } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { cn } from '@/utils/cn'
 import { useHousehold } from '@/hooks/useHousehold'
@@ -10,6 +10,7 @@ import { OfflineBanner } from '@/components/ui/status'
 import { VoiceDialog } from '@/features/voice/VoiceDialog'
 import { ReceiptDialog } from '@/features/receipts/ReceiptDialog'
 import { syncOfflineDrafts } from '@/services/offline'
+import { requireSupabase } from '@/lib/supabase'
 
 const desktopNav = [
   { to: '/', label: 'Dashboard', icon: Home },
@@ -34,6 +35,19 @@ export function AppShell() {
   const [addOpen, setAddOpen] = useState(false)
   const [voiceOpen, setVoiceOpen] = useState(false)
   const [receiptOpen, setReceiptOpen] = useState(false)
+  const [signingOut, setSigningOut] = useState(false)
+
+  async function signOut() {
+    if (signingOut) return
+    setSigningOut(true)
+    try {
+      await requireSupabase().auth.signOut()
+      qc.clear()
+      navigate('/')
+    } finally {
+      setSigningOut(false)
+    }
+  }
 
   useEffect(() => {
     const onOnline = async () => {
@@ -68,7 +82,7 @@ export function AppShell() {
       <div className="md:pl-64">
         <header className="sticky top-0 z-20 hidden h-16 items-center justify-between border-b border-slate-200 bg-white/90 px-6 backdrop-blur md:flex">
           <div><p className="text-sm font-semibold text-slate-900">{household?.name}</p><p className="text-xs text-slate-400">{household?.default_currency} · {household?.timezone}</p></div>
-          <Button onClick={() => setAddOpen(true)}><Plus className="h-4 w-4"/>Tambah transaksi</Button>
+          <Button variant="outline" onClick={signOut} disabled={signingOut}><LogOut className="h-4 w-4"/>{signingOut ? 'Keluar…' : 'Logout'}</Button>
         </header>
         <Outlet />
       </div>

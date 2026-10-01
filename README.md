@@ -8,14 +8,15 @@ Production-oriented household finance PWA based on the supplied waterfall specif
 - **Delivery:** Cloudflare Workers Static Assets (SPA fallback)
 - **Backend:** Supabase Auth + PostgreSQL + Storage + Edge Functions + RLS
 - **Voice:** Groq Whisper Large V3 Turbo, fallback Whisper Large V3
-- **Intent / receipt:** Gemini Flash-class model configured by environment variable; Groq structured-output fallback for intent
+- **Voice intent:** Gemini 3.8 Flash → Groq GPT-OSS 120B → Groq GPT-OSS 20B → Gemini 3.5 Flash → Gemini 3.5 Flash-Lite
+- **Receipt vision:** Gemini 3.8 Flash → Qwen 3.8 27B on Groq (images) → Gemini 3.5 Flash → Gemini 3.5 Flash-Lite → manual review
 - **Source of truth:** PostgreSQL. AI never writes SQL and never becomes the financial calculation engine.
 
 Core rule: **AI interprets → application validates → database calculates → user remains in control.**
 
 ## Implemented MVP
 
-Authentication (email/password and magic link), household onboarding, roles, accounts, customizable categories/subcategories, expense/income/transfer, multi-category split transactions, atomic account movements, soft delete/restore, search/filter foundation, dashboard with budget progress, DB-calculated reports with date/account/category/member/merchant/type filters, budgets, voice CREATE/UPDATE/DELETE with candidate confirmation, receipt upload/extraction/review, receipt item split when arithmetic is consistent, duplicate detection, private storage, audit logs, PWA, offline manual drafts, privacy retention preferences, member invitations, rate limiting, idempotency, and AI prompt/model logging.
+Authentication (email/password and magic link; no Google OAuth), household onboarding, roles, accounts, customizable categories/subcategories, expense/income/transfer, multi-category split transactions, atomic account movements, soft delete/restore, search/filter foundation, dashboard with budget progress, DB-calculated reports with date/account/category/member/merchant/type filters, budgets, Voice Superpower for transaction/account/category/reset commands with guarded confirmation, receipt upload/extraction/review with multi-provider vision fallback and manual-review fallback, receipt item split when arithmetic is consistent, duplicate detection, private storage, audit logs, PWA, offline manual drafts, privacy retention preferences, member invitations, rate limiting, idempotency, and AI prompt/model logging.
 
 ## Local setup
 
@@ -42,13 +43,21 @@ Never place `GROQ_API_KEY`, `GEMINI_API_KEY`, or `SUPABASE_SERVICE_ROLE_KEY` in 
 supabase secrets set GROQ_API_KEY=... GEMINI_API_KEY=... \
   GROQ_TRANSCRIPTION_MODEL=whisper-large-v3-turbo \
   GROQ_TRANSCRIPTION_FALLBACK_MODEL=whisper-large-v3 \
-  GROQ_INTENT_MODEL=openai/gpt-oss-20b \
   GEMINI_INTENT_MODEL=gemini-3.8-flash \
+  GROQ_INTENT_MODEL=openai/gpt-oss-120b \
+  GROQ_INTENT_FALLBACK_MODEL=openai/gpt-oss-20b \
+  GEMINI_INTENT_FALLBACK_MODEL=gemini-3.5-flash \
+  GEMINI_INTENT_FALLBACK_LITE_MODEL=gemini-3.5-flash-lite \
   GEMINI_RECEIPT_MODEL=gemini-3.8-flash \
+  GROQ_RECEIPT_FALLBACK_MODEL=qwen/qwen3.8-27b \
+  GEMINI_RECEIPT_FALLBACK_MODEL=gemini-3.5-flash \
+  GEMINI_RECEIPT_FALLBACK_LITE_MODEL=gemini-3.5-flash-lite \
   APP_URL=https://your-domain.example
 ```
 
 Model names are intentionally configurable because providers can deprecate or rename models.
+
+For the 2026-10-02 voice semantic-guard fix and post-deploy verification, see `docs/VOICE_FIX_20261002.md`.
 
 ## Database safety
 

@@ -14,7 +14,12 @@ import { listCategories } from '@/services/categories'
 import type { ReceiptExtraction } from '@/types/domain'
 import { formatCurrency } from '@/utils/currency'
 
-interface ExtractionResult extends ReceiptExtraction { suggested_account_id?: string | null; suggested_category_id?: string | null }
+interface ExtractionResult extends ReceiptExtraction {
+  suggested_account_id?: string | null
+  suggested_category_id?: string | null
+  manual_entry_required?: boolean
+  ai?: { provider?: string | null; model?: string | null }
+}
 
 async function optimizeReceiptFile(file: File): Promise<File> {
   if (file.type === 'application/pdf' || !file.type.startsWith('image/')) return file
@@ -112,7 +117,8 @@ export function ReceiptDialog({ open, onOpenChange }: { open: boolean; onOpenCha
       {fileName && !extraction && <p className="text-center text-xs text-slate-500">{fileName}</p>}
       {error && <div className="flex gap-2 rounded-xl bg-red-50 p-3 text-sm text-red-700"><AlertTriangle className="h-5 w-5 shrink-0"/>{error}</div>}
       {extraction && <div className="space-y-4">
-        <div className="flex items-center justify-between rounded-2xl bg-slate-100 p-4"><div><p className="text-sm font-semibold">Hasil ekstraksi</p><p className="text-xs text-slate-500">Confidence keseluruhan {Math.round(extraction.overall_confidence * 100)}%</p></div><span className={reviewFields ? 'rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800' : 'rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800'}>{reviewFields ? `${reviewFields} field perlu review` : 'Siap direview'}</span></div>
+        {extraction.manual_entry_required && <div className="flex gap-2 rounded-xl bg-amber-50 p-3 text-sm text-amber-800"><AlertTriangle className="h-5 w-5 shrink-0"/><span>Semua model AI receipt sedang tidak tersedia atau gagal membaca file. Receipt tetap tersimpan; isi data transaksi secara manual lalu review sebelum menyimpan.</span></div>}
+        <div className="flex items-center justify-between rounded-2xl bg-slate-100 p-4"><div><p className="text-sm font-semibold">{extraction.manual_entry_required ? 'Review manual receipt' : 'Hasil ekstraksi'}</p><p className="text-xs text-slate-500">Confidence keseluruhan {Math.round(extraction.overall_confidence * 100)}%{extraction.ai?.model ? ` · ${extraction.ai.model}` : ''}</p></div><span className={reviewFields ? 'rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800' : 'rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-800'}>{extraction.manual_entry_required ? 'Isi manual' : reviewFields ? `${reviewFields} field perlu review` : 'Siap direview'}</span></div>
         <div className="grid gap-4 sm:grid-cols-2">
           <label><span className="field-label">Merchant {extraction.merchant.needs_review && '⚠'}</span><Input value={form.merchant} onChange={(e) => setForm({ ...form, merchant: e.target.value })}/></label>
           <label><span className="field-label">Tanggal {extraction.transaction_date.needs_review && '⚠'}</span><Input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })}/></label>

@@ -18,7 +18,21 @@ npx supabase functions deploy financial-query
 npx supabase functions deploy invite-member
 ```
 
-Set Edge Function secrets using `supabase secrets set`. Authentication uses Supabase email/password and magic link; Google OAuth is not required.
+Set Edge Function secrets using `supabase secrets set`. Authentication uses Supabase email/password and magic link; Google OAuth is not required. The current AI routing expects:
+
+```bash
+npx supabase secrets set GEMINI_INTENT_MODEL=gemini-3.8-flash
+npx supabase secrets set GROQ_INTENT_MODEL=openai/gpt-oss-120b
+npx supabase secrets set GROQ_INTENT_FALLBACK_MODEL=openai/gpt-oss-20b
+npx supabase secrets set GEMINI_INTENT_FALLBACK_MODEL=gemini-3.5-flash
+npx supabase secrets set GEMINI_INTENT_FALLBACK_LITE_MODEL=gemini-3.5-flash-lite
+npx supabase secrets set GEMINI_RECEIPT_MODEL=gemini-3.8-flash
+npx supabase secrets set GROQ_RECEIPT_FALLBACK_MODEL=qwen/qwen3.8-27b
+npx supabase secrets set GEMINI_RECEIPT_FALLBACK_MODEL=gemini-3.5-flash
+npx supabase secrets set GEMINI_RECEIPT_FALLBACK_LITE_MODEL=gemini-3.5-flash-lite
+```
+
+`GEMINI_API_KEY` and `GROQ_API_KEY` remain server-side Supabase secrets. Never expose them as Vite variables.
 
 ## 2. Cloudflare
 

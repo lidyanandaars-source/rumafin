@@ -1,8 +1,10 @@
 import { requireSupabase } from './supabase'
 
+type EdgeBody = Record<string, unknown> | FormData | Blob | ArrayBuffer | string | null
+
 export async function invokeEdge<T>(
   name: string,
-  body?: Record<string, unknown>,
+  body?: EdgeBody,
   options?: { headers?: Record<string, string> },
 ) {
   const client = requireSupabase()

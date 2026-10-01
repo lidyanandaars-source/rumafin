@@ -9,8 +9,8 @@ This repository implements the supplied waterfall as an MVP-first full-stack sys
 | UI/UX | mobile-first responsive React PWA; dashboard, transactions, accounts, categories, budgets, reports, members, settings |
 | Backend foundation | Supabase Auth/Postgres/Storage/Edge Functions, RLS, private buckets, atomic transaction RPCs |
 | Manual finance | expense, income, transfer, multi-category split, edit, soft delete, restore, search/filter, offline draft |
-| Voice | MediaRecorder → Groq Whisper → structured intent → deterministic preview/candidate matching → confirmation → RPC commit |
-| Receipt AI | client image optimization → private Storage → Gemini structured extraction → confidence/arithmetic/duplicate review → RPC finalize |
+| Voice | MediaRecorder → Groq Whisper → 4-level intent fallback → Voice Superpower preview/candidate matching → guarded confirmation → RPC commit |
+| Receipt AI | client image optimization → private Storage → Gemini/Qwen/Gemini/Gemini-Lite fallback → confidence/arithmetic/duplicate review → manual-review fallback → RPC finalize |
 | Reporting | DB-computed KPI, categories, daily trend, merchants, waterfall, heatmap, budget progress; filters by date/account/category/member/merchant/type |
 | AI assistant backend | natural-language financial query → structured DB filters → PostgreSQL RPC calculation |
 | Security | RLS, JWT, private Storage, server-only AI secrets, rate limiting, MIME/size validation, idempotency, audit logging |

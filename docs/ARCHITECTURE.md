@@ -6,12 +6,12 @@
 React form → Zod → `create_financial_transaction()` / `update_financial_transaction()` → PostgreSQL validation → transaction + splits + movements + audit log.
 
 ### Voice
-Browser MediaRecorder → `voice-transcribe` → Groq Whisper → transcript → `voice-interpret` → Gemini structured JSON (Groq strict JSON fallback) → `voice_commands` + `ai_extractions` → `transaction-command-preview` → deterministic candidate matching → user confirmation → `transaction-command-commit` → financial RPC → audit log.
+Browser MediaRecorder → `voice-transcribe` → Groq Whisper → transcript → `voice-interpret` → Gemini 3.8 Flash → Groq GPT-OSS 120B → Groq GPT-OSS 20B → Gemini 3.5 Flash → Gemini 3.5 Flash-Lite → semantic guard/normalization → `voice_commands` + `ai_extractions` → `transaction-command-preview` → deterministic candidate matching → user confirmation → `transaction-command-commit` → guarded financial/account RPC → audit log.
 
 No AI component receives permission to compose or execute SQL.
 
 ### Receipt
-Private Storage → `receipt-extract` → Gemini image/PDF understanding with JSON schema → per-field confidence + arithmetic checks + duplicate search → receipt review → `finalize_receipt_transaction()` → financial RPC → receipt linked to final transaction.
+Private Storage → `receipt-extract` → Gemini 3.8 Flash → Qwen 3.8 27B on Groq for images → Gemini 3.5 Flash → Gemini 3.5 Flash-Lite → per-field confidence + arithmetic checks + duplicate search → receipt/manual review → `finalize_receipt_transaction()` → financial RPC → receipt linked to final transaction. PDF skips Qwen and continues through the Gemini fallbacks.
 
 Unreadable fields must be null, never guessed.
 

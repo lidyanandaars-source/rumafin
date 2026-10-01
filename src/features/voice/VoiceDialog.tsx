@@ -5,7 +5,6 @@ import { Dialog } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input, Textarea } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { requireSupabase } from '@/lib/supabase'
 import { invokeEdge } from '@/lib/edge'
 import { useHousehold } from '@/hooks/useHousehold'
 import { formatCurrency } from '@/utils/currency'
@@ -37,6 +36,8 @@ interface PreviewResult {
   intent: string
   risk_level?: 'READ_ONLY' | 'NORMAL' | 'DESTRUCTIVE' | 'CRITICAL'
   requires_confirmation: boolean
+  can_commit?: boolean
+  blocking_issues?: string[]
   requires_typed_confirmation?: boolean
   confirmation_phrase?: string | null
   candidate_kind?: 'transaction' | 'account' | null
@@ -48,6 +49,7 @@ interface PreviewResult {
     account_name?: string
     account_type?: string
     opening_balance?: number
+    opening_balance_defaulted?: boolean
     category_name?: string
     category_transaction_type?: string
     transaction_at?: string
@@ -141,15 +143,13 @@ export function VoiceDialog({ open, onOpenChange }: { open: boolean; onOpenChang
     setBusy(true)
     setError(null)
     try {
-      const client = requireSupabase()
       const form = new FormData()
       form.append('file', blob, 'voice.webm')
       form.append('household_id', householdId)
-      const { data, error: invokeError } = await client.functions.invoke<{
+      const data = await invokeEdge<{
         transcript: string
         audio_path?: string | null
-      }>('voice-transcribe', { body: form })
-      if (invokeError) throw invokeError
+      }>('voice-transcribe', form)
       if (!data?.transcript) throw new Error('Ucapan belum dapat ditranskripsi. Coba ulangi lebih jelas.')
       setTranscript(data.transcript)
       await interpret(data.transcript, data.audio_path ?? null)
@@ -227,6 +227,7 @@ export function VoiceDialog({ open, onOpenChange }: { open: boolean; onOpenChang
   const typedConfirmationValid = !preview?.requires_typed_confirmation ||
     confirmationText.trim().toLocaleUpperCase('id-ID') ===
       String(effectiveConfirmationPhrase ?? '').trim().toLocaleUpperCase('id-ID')
+  const canCommit = preview?.can_commit !== false
 
   return (
     <Dialog
@@ -322,7 +323,10 @@ export function VoiceDialog({ open, onOpenChange }: { open: boolean; onOpenChang
                 {preview.prepared.opening_balance != null && (
                   <div>
                     <dt className="text-slate-400">Saldo awal</dt>
-                    <dd className="font-semibold">{formatCurrency(preview.prepared.opening_balance)}</dd>
+                    <dd className="font-semibold">
+                      {formatCurrency(preview.prepared.opening_balance)}
+                      {preview.prepared.opening_balance_defaulted ? ' (default)' : ''}
+                    </dd>
                   </div>
                 )}
                 {preview.prepared.source_account_name && (
@@ -362,6 +366,13 @@ export function VoiceDialog({ open, onOpenChange }: { open: boolean; onOpenChang
                   </div>
                 )}
               </dl>
+            )}
+
+            {preview.can_commit === false && !!preview.blocking_issues?.length && (
+              <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                Perintah belum aman untuk dijalankan karena: <strong>{preview.blocking_issues.join(', ')}</strong>.
+                Edit transcript lalu pilih <strong>Interpretasi ulang</strong>, atau gunakan input manual.
+              </div>
             )}
 
             {!!preview.candidates?.length && (
@@ -432,6 +443,7 @@ export function VoiceDialog({ open, onOpenChange }: { open: boolean; onOpenChang
                   className="flex-1"
                   disabled={
                     busy ||
+                    !canCommit ||
                     (Boolean(preview.candidates?.length) && !selected) ||
                     !typedConfirmationValid
                   }

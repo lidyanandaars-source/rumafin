@@ -4,6 +4,7 @@ export const financialCommandSchema = {
   properties: {
     intent: {
       type: 'string',
+      description: 'Choose the single financial/admin intent that exactly matches the transcript. Explicit account creation must use CREATE_ACCOUNT, never CREATE_TRANSACTION.',
       enum: [
         'CREATE_TRANSACTION',
         'UPDATE_TRANSACTION',
@@ -26,14 +27,14 @@ export const financialCommandSchema = {
       type: ['string', 'null'],
       enum: ['EXPENSE', 'INCOME', 'TRANSFER', 'ADJUSTMENT', null],
     },
-    amount: { type: ['number', 'null'], minimum: 0 },
+    amount: { type: ['number', 'null'], minimum: 0, description: 'Transaction/transfer amount only. Do not put an account opening balance here.' },
     currency: { type: ['string', 'null'] },
     date: { type: ['string', 'null'] },
     date_reference: {
       type: ['string', 'null'],
       enum: ['TODAY', 'YESTERDAY', null],
     },
-    account_hint: { type: ['string', 'null'] },
+    account_hint: { type: ['string', 'null'], description: 'For CREATE_ACCOUNT, this is the new account name. For CREATE_TRANSACTION, this is the existing payment account hint.' },
     source_account_hint: { type: ['string', 'null'] },
     destination_account_hint: { type: ['string', 'null'] },
     category_hint: { type: ['string', 'null'] },
@@ -50,7 +51,7 @@ export const financialCommandSchema = {
           enum: ['TODAY', 'YESTERDAY', null],
         },
         date: { type: ['string', 'null'] },
-        amount: { type: ['number', 'null'], minimum: 0 },
+        amount: { type: ['number', 'null'], minimum: 0, description: 'Amount of the existing transaction used only as a matching criterion.' },
       },
       required: ['description', 'merchant', 'relative_date', 'date', 'amount'],
     },
@@ -58,9 +59,9 @@ export const financialCommandSchema = {
       type: ['object', 'null'],
       additionalProperties: false,
       properties: {
-        amount: { type: ['number', 'null'], minimum: 0 },
+        amount: { type: ['number', 'null'], minimum: 0, description: 'Proposed new transaction amount for UPDATE_TRANSACTION.' },
         date: { type: ['string', 'null'] },
-        account_hint: { type: ['string', 'null'] },
+        account_hint: { type: ['string', 'null'], description: 'Proposed new existing account name/hint for UPDATE_TRANSACTION.' },
         category_hint: { type: ['string', 'null'] },
         merchant_name: { type: ['string', 'null'] },
         description: { type: ['string', 'null'] },
@@ -71,7 +72,7 @@ export const financialCommandSchema = {
       type: ['object', 'null'],
       additionalProperties: false,
       properties: {
-        name: { type: ['string', 'null'] },
+        name: { type: ['string', 'null'], description: 'Name of an existing account to select. Must be null for CREATE_ACCOUNT.' },
         account_type: {
           type: ['string', 'null'],
           enum: ['CASH', 'BANK', 'EWALLET', 'CREDIT_CARD', 'SAVINGS', 'OTHER', null],
@@ -84,11 +85,12 @@ export const financialCommandSchema = {
       additionalProperties: false,
       properties: {
         name: { type: ['string', 'null'] },
-        opening_balance: { type: ['number', 'null'] },
+        opening_balance: { type: ['number', 'null'], minimum: 0, description: 'Opening balance for CREATE_ACCOUNT or SET_ACCOUNT_OPENING_BALANCE. Never a transaction amount.' },
       },
       required: ['name', 'opening_balance'],
     },
     account_type: {
+      description: 'Type of a newly created account when clearly stated or strongly implied (for example Bank Mandiri => BANK, GoPay ewallet => EWALLET).',
       type: ['string', 'null'],
       enum: ['CASH', 'BANK', 'EWALLET', 'CREDIT_CARD', 'SAVINGS', 'OTHER', null],
     },

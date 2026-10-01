@@ -22,6 +22,9 @@
 - [ ] “Bayar listrik satu juta dua ratus ribu” → amount 1,200,000, Electricity/Housing candidate.
 - [ ] “Hapus belanja kemarin” with >1 match → no delete until one candidate is selected.
 - [ ] Unclear amount → no invented amount; user is directed to manual completion.
+- [ ] “Buat akun baru bernama Bank Mandiri dengan saldo 10 juta rupiah” → CREATE_ACCOUNT, Bank Mandiri, BANK, opening balance 10,000,000.
+- [ ] Explicit account creation must never persist as CREATE_TRANSACTION.
+- [ ] Missing transaction amount/account/category must not silently render as Rp0/Cash/Others and must block commit.
 - [ ] Retried commit → no duplicate financial transaction.
 
 ## Receipt critical cases
