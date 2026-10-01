@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react'
 import ReactECharts from 'echarts-for-react'
 import { useQuery } from '@tanstack/react-query'
-import { FilterX } from 'lucide-react'
+import { FileSpreadsheet, FileText, FilterX, LoaderCircle } from 'lucide-react'
 import { useHousehold } from '@/hooks/useHousehold'
-import { getFilteredReport } from '@/services/reports'
+import { getFilteredReport, getFilteredReportTransactions } from '@/services/reports'
+import { exportReportToExcel, exportReportToWord } from '@/services/report-export'
 import { listAccounts } from '@/services/accounts'
 import { listCategories } from '@/services/categories'
 import { requireSupabase } from '@/lib/supabase'
@@ -23,7 +24,7 @@ interface ReportMember {
 }
 
 export function ReportsPage() {
-  const { householdId } = useHousehold()
+  const { householdId, household } = useHousehold()
   const initial = currentMonthRange()
   const [from, setFrom] = useState(initial.from)
   const [to, setTo] = useState(initial.to)
@@ -32,6 +33,8 @@ export function ReportsPage() {
   const [memberId, setMemberId] = useState('')
   const [merchant, setMerchant] = useState('')
   const [transactionType, setTransactionType] = useState<'' | TransactionType>('')
+  const [exportBusy, setExportBusy] = useState<'excel' | 'word' | null>(null)
+  const [exportError, setExportError] = useState<string | null>(null)
 
   const accounts = useQuery({ queryKey: ['accounts', householdId], queryFn: () => listAccounts(householdId!), enabled: Boolean(householdId) })
   const categories = useQuery({ queryKey: ['categories', householdId], queryFn: () => listCategories(householdId!), enabled: Boolean(householdId) })
@@ -110,8 +113,40 @@ export function ReportsPage() {
     setAccountId(''); setCategoryId(''); setMemberId(''); setMerchant(''); setTransactionType('')
   }
 
+  const handleExport = async (format: 'excel' | 'word') => {
+    if (!householdId || !data) return
+    setExportBusy(format)
+    setExportError(null)
+    try {
+      const transactions = await getFilteredReportTransactions(householdId, from, to, filters)
+      const context = {
+        householdName: household?.name ?? 'Rumah Tangga',
+        currency: household?.default_currency ?? 'IDR',
+        timezone: household?.timezone ?? 'Asia/Jakarta',
+        from,
+        to,
+        filters,
+        filterLabels: {
+          account: accounts.data?.find((a) => a.id === accountId)?.name ?? null,
+          category: categories.data?.find((c) => c.id === categoryId)?.name ?? null,
+          member: members.data?.find((m) => m.user_id === memberId)?.profile?.display_name ?? members.data?.find((m) => m.user_id === memberId)?.profile?.email ?? null,
+          merchant: merchant.trim() || null,
+          transactionType: transactionType || null,
+        },
+        summary: data,
+        transactions,
+      }
+      if (format === 'excel') await exportReportToExcel(context)
+      else await exportReportToWord(context)
+    } catch (e) {
+      setExportError(e instanceof Error ? e.message : 'Ekspor laporan gagal.')
+    } finally {
+      setExportBusy(null)
+    }
+  }
+
   return <main className="page">
-    <div><h1 className="page-title">Laporan</h1><p className="page-subtitle">Semua angka dihitung PostgreSQL; AI tidak menjadi calculation engine.</p></div>
+    <div className="flex flex-wrap items-end justify-between gap-3"><div><h1 className="page-title">Laporan</h1><p className="page-subtitle">Semua angka dihitung PostgreSQL; AI tidak menjadi calculation engine.</p></div><div className="flex gap-2"><Button variant="outline" disabled={!data || Boolean(exportBusy)} onClick={() => handleExport('excel')}>{exportBusy === 'excel' ? <LoaderCircle className="h-4 w-4 animate-spin"/> : <FileSpreadsheet className="h-4 w-4"/>}Excel</Button><Button variant="outline" disabled={!data || Boolean(exportBusy)} onClick={() => handleExport('word')}>{exportBusy === 'word' ? <LoaderCircle className="h-4 w-4 animate-spin"/> : <FileText className="h-4 w-4"/>}Word</Button></div></div>
     <div className="mt-5 grid gap-3 rounded-2xl border border-slate-200 bg-white p-3 sm:grid-cols-2 xl:grid-cols-4">
       <label><span className="field-label">Dari</span><Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></label>
       <label><span className="field-label">Sampai</span><Input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></label>
@@ -122,6 +157,7 @@ export function ReportsPage() {
       <label><span className="field-label">Tipe transaksi</span><Select value={transactionType} onChange={(e) => setTransactionType(e.target.value as '' | TransactionType)}><option value="">Semua tipe</option><option value="EXPENSE">Expense</option><option value="INCOME">Income</option><option value="TRANSFER">Transfer</option><option value="ADJUSTMENT">Adjustment</option></Select></label>
       <div className="flex items-end">{hasFilters && <Button variant="outline" className="w-full" onClick={clearFilters}><FilterX className="h-4 w-4"/>Hapus filter</Button>}</div>
     </div>
+    {exportError && <div className="mt-3 rounded-2xl bg-red-50 p-3 text-sm text-red-700">{exportError}</div>}
 
     {query.isLoading ? <LoadingState /> : query.error ? <div className="mt-4 rounded-2xl bg-red-50 p-4 text-sm text-red-700">{query.error.message}</div> : <>
       <section className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

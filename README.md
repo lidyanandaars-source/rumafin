@@ -16,7 +16,7 @@ Core rule: **AI interprets → application validates → database calculates →
 
 ## Implemented MVP
 
-Authentication (email/password and magic link; no Google OAuth), household onboarding, roles, accounts, customizable categories/subcategories, expense/income/transfer, multi-category split transactions, atomic account movements, soft delete/restore, search/filter foundation, dashboard with budget progress, DB-calculated reports with date/account/category/member/merchant/type filters, budgets, Voice Superpower for transaction/account/category/reset commands with guarded confirmation, receipt upload/extraction/review with multi-provider vision fallback and manual-review fallback, receipt item split when arithmetic is consistent, duplicate detection, private storage, audit logs, PWA, offline manual drafts, privacy retention preferences, member invitations, rate limiting, idempotency, and AI prompt/model logging.
+Authentication (email/password and magic link; no Google OAuth), household onboarding, roles, accounts with customizable account types, customizable categories/subcategories, expense/income/transfer, multi-category split transactions, atomic account movements, soft delete/restore, search/filter foundation, dashboard with budget progress, DB-calculated reports with date/account/category/member/merchant/type filters plus Excel/Word export, budgets, Voice Superpower for transaction/account/category/reset commands with guarded confirmation, receipt upload/extraction/review with multi-provider vision fallback and manual-review fallback, receipt item split when arithmetic is consistent, duplicate detection, private storage, audit logs, PWA, offline manual drafts, privacy retention preferences, member invitations, rate limiting, idempotency, and AI prompt/model logging.
 
 ## Local setup
 
@@ -58,6 +58,7 @@ supabase secrets set GROQ_API_KEY=... GEMINI_API_KEY=... \
 Model names are intentionally configurable because providers can deprecate or rename models.
 
 For the 2026-10-02 voice semantic-guard fix and post-deploy verification, see `docs/VOICE_FIX_20261002.md`.
+For customizable account types, voice account-type administration, and Excel/Word report export, see `docs/UPDATE_20261002_CUSTOM_ACCOUNT_TYPES_AND_EXPORTS.md`.
 
 ## Database safety
 

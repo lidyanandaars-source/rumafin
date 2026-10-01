@@ -1,5 +1,6 @@
 export type HouseholdRole = 'OWNER' | 'ADMIN' | 'MEMBER' | 'VIEWER'
-export type AccountType = 'CASH' | 'BANK' | 'EWALLET' | 'CREDIT_CARD' | 'SAVINGS' | 'OTHER'
+export type LegacyAccountType = 'CASH' | 'BANK' | 'EWALLET' | 'CREDIT_CARD' | 'SAVINGS' | 'OTHER'
+export type AccountType = string
 export type TransactionType = 'EXPENSE' | 'INCOME' | 'TRANSFER' | 'ADJUSTMENT'
 export type TransactionSource = 'MANUAL' | 'VOICE' | 'RECEIPT' | 'RECURRING' | 'IMPORT'
 export type TransactionStatus = 'DRAFT' | 'PENDING_REVIEW' | 'CONFIRMED' | 'VOIDED'
@@ -19,11 +20,26 @@ export interface Membership {
   household?: Household
 }
 
+export interface AccountTypeDefinition {
+  id: string
+  household_id: string
+  name: string
+  legacy_type: LegacyAccountType
+  icon: string | null
+  color: string | null
+  is_system: boolean
+  created_at: string
+  updated_at: string
+  deleted_at: string | null
+}
+
 export interface Account {
   id: string
   household_id: string
   name: string
   account_type: AccountType
+  account_type_id: string
+  account_type_name?: string | null
   currency: string
   opening_balance: number
   current_balance?: number
@@ -112,8 +128,20 @@ export type FinancialIntent =
   | 'CREATE_TRANSACTION'
   | 'UPDATE_TRANSACTION'
   | 'DELETE_TRANSACTION'
+  | 'RESTORE_TRANSACTION'
   | 'FIND_TRANSACTION'
+  | 'TRANSFER_MONEY'
+  | 'CREATE_ACCOUNT'
+  | 'UPDATE_ACCOUNT'
+  | 'SET_ACCOUNT_OPENING_BALANCE'
+  | 'ARCHIVE_ACCOUNT'
+  | 'DELETE_ACCOUNT_CASCADE'
+  | 'RESET_ACCOUNT'
+  | 'CREATE_ACCOUNT_TYPE'
+  | 'UPDATE_ACCOUNT_TYPE'
+  | 'DELETE_ACCOUNT_TYPE'
   | 'CREATE_CATEGORY'
+  | 'RESET_HOUSEHOLD_FINANCES'
   | 'GET_FINANCIAL_SUMMARY'
 
 export interface FinancialCommand {
@@ -124,6 +152,8 @@ export interface FinancialCommand {
   date?: string | null
   date_reference?: 'TODAY' | 'YESTERDAY' | null
   account_hint?: string | null
+  source_account_hint?: string | null
+  destination_account_hint?: string | null
   category_hint?: string | null
   merchant_hint?: string | null
   description?: string | null
@@ -142,7 +172,33 @@ export interface FinancialCommand {
     merchant_name?: string | null
     description?: string | null
   } | null
+  account_selector?: { name?: string | null; account_type?: string | null } | null
+  account_changes?: { name?: string | null; opening_balance?: number | null } | null
+  account_type?: string | null
+  account_type_name?: string | null
+  account_type_selector?: { name?: string | null } | null
+  account_type_changes?: { name?: string | null } | null
+  category_name?: string | null
+  parent_category_hint?: string | null
+  category_transaction_type?: 'EXPENSE' | 'INCOME' | 'BOTH' | null
   confidence: number
+}
+
+export interface ReportTransactionRow {
+  id: string
+  transaction_at: string
+  transaction_type: TransactionType
+  merchant_name: string | null
+  description: string | null
+  notes: string | null
+  total_amount: number
+  filtered_amount: number
+  currency: string
+  source: TransactionSource
+  created_by: string
+  member_name: string
+  accounts: Array<{ id: string; name: string; type: string; movement: number }>
+  categories: Array<{ id: string; name: string; amount: number }>
 }
 
 export interface ReceiptField<T> {
@@ -159,6 +215,7 @@ export interface ReceiptExtraction {
   tax: ReceiptField<number>
   discount: ReceiptField<number>
   payment_method: ReceiptField<string>
+  category_hint: ReceiptField<string>
   items: Array<{
     name: string | null
     quantity: number | null
@@ -166,9 +223,4 @@ export interface ReceiptExtraction {
     total: number | null
     confidence: number
   }>
-  overall_confidence: number
-  needs_review: boolean
-  duplicate_candidates?: Transaction[]
-  storage_path?: string
-  receipt_id?: string
 }

@@ -33,7 +33,7 @@ export async function matchAccount(admin: any, householdId: string, hint?: strin
 
   let query = admin
     .from('account_balances')
-    .select('id,name,account_type,currency,opening_balance,current_balance,is_active')
+    .select('id,name,account_type,account_type_id,account_type_name,currency,opening_balance,current_balance,is_active')
     .eq('household_id', householdId)
 
   if (!includeInactive) query = query.eq('is_active', true)
@@ -62,7 +62,7 @@ async function findAccountCandidates(admin: any, householdId: string, command: a
 
   const { data, error } = await admin
     .from('account_balances')
-    .select('id,name,account_type,currency,opening_balance,current_balance,is_active')
+    .select('id,name,account_type,account_type_id,account_type_name,currency,opening_balance,current_balance,is_active')
     .eq('household_id', householdId)
     .order('name')
 
@@ -70,7 +70,7 @@ async function findAccountCandidates(admin: any, householdId: string, command: a
   let accounts = data ?? []
 
   if (selector.account_type) {
-    accounts = accounts.filter((a: any) => a.account_type === selector.account_type)
+    accounts = accounts.filter((a: any) => norm(a.account_type_name) === norm(selector.account_type) || norm(a.account_type) === norm(selector.account_type))
   }
 
   const n = norm(hint)
@@ -84,6 +84,48 @@ async function findAccountCandidates(admin: any, householdId: string, command: a
   }
 
   return accounts.slice(0, 20)
+}
+
+
+async function matchAccountType(admin: any, householdId: string, hint?: string | null) {
+  const n = norm(hint)
+  if (!n) return null
+  const { data, error } = await admin
+    .from('account_types')
+    .select('id,name,legacy_type,icon,color,is_system,deleted_at')
+    .eq('household_id', householdId)
+    .is('deleted_at', null)
+    .order('is_system', { ascending: false })
+    .order('name')
+  if (error) throw error
+  const types = data ?? []
+  const aliases: Record<string, string> = {
+    cash: 'cash', tunai: 'cash', bank: 'bank', rekening: 'bank',
+    ewallet: 'e wallet', 'e wallet': 'e wallet', 'dompet digital': 'e wallet',
+    'credit card': 'kartu kredit', 'kartu kredit': 'kartu kredit',
+    savings: 'tabungan', tabungan: 'tabungan', other: 'lainnya', lainnya: 'lainnya',
+  }
+  const alias = aliases[n] ?? n
+  const exact = types.find((t: any) => norm(t.name) === alias || norm(t.legacy_type) === n)
+  if (exact) return exact
+  const partials = types.filter((t: any) => norm(t.name).includes(alias) || alias.includes(norm(t.name)))
+  return partials.length === 1 ? partials[0] : null
+}
+
+async function findAccountTypeCandidates(admin: any, householdId: string, hint?: string | null) {
+  const n = norm(hint)
+  if (!n) return []
+  const { data, error } = await admin
+    .from('account_types')
+    .select('id,name,legacy_type,icon,color,is_system,deleted_at')
+    .eq('household_id', householdId)
+    .is('deleted_at', null)
+    .order('name')
+  if (error) throw error
+  const rows = data ?? []
+  const exact = rows.filter((t: any) => norm(t.name) === n || norm(t.legacy_type) === n)
+  if (exact.length) return exact
+  return rows.filter((t: any) => norm(t.name).includes(n) || n.includes(norm(t.name))).slice(0, 20)
 }
 
 const keywordMap: Array<[RegExp, string[]]> = [
@@ -346,10 +388,10 @@ export async function buildPreview(admin: any, householdId: string, command: any
     const name = String(command.account_hint ?? '').trim()
     const rawOpening = command.account_changes?.opening_balance
     const opening = rawOpening == null ? 0 : Number(rawOpening)
-    const type = command.account_type ?? null
+    const type = await matchAccountType(admin, householdId, command.account_type)
     const missing: string[] = []
     if (!name) missing.push('nama akun')
-    if (!type) missing.push('tipe akun')
+    if (!type) missing.push('tipe akun yang valid')
     if (!Number.isFinite(opening) || opening < 0) missing.push('saldo awal')
     return {
       intent: command.intent,
@@ -361,13 +403,60 @@ export async function buildPreview(admin: any, householdId: string, command: any
       blocking_issues: missing,
       prepared: {
         account_name: name || undefined,
-        account_type: type ?? undefined,
+        account_type_id: type?.id,
+        account_type: type?.name,
+        account_type_legacy: type?.legacy_type,
         opening_balance: Number.isFinite(opening) && opening >= 0 ? opening : undefined,
         opening_balance_defaulted: rawOpening == null,
         currency: command.currency ?? 'IDR',
       },
       candidates: [],
       candidate_kind: null,
+    }
+  }
+
+  if (command.intent === 'CREATE_ACCOUNT_TYPE') {
+    const name = String(command.account_type_name ?? '').trim()
+    return {
+      intent: command.intent,
+      risk_level: 'NORMAL',
+      requires_confirmation: true,
+      requires_typed_confirmation: false,
+      message: name ? `Tipe akun baru “${name}” akan ditambahkan.` : 'Nama tipe akun belum jelas.',
+      can_commit: Boolean(name),
+      blocking_issues: name ? [] : ['nama tipe akun'],
+      prepared: { account_type_name: name || undefined },
+      candidates: [],
+      candidate_kind: null,
+    }
+  }
+
+  if (['UPDATE_ACCOUNT_TYPE', 'DELETE_ACCOUNT_TYPE'].includes(command.intent)) {
+    const hint = command.account_type_selector?.name
+    const candidates = await findAccountTypeCandidates(admin, householdId, hint)
+    const newName = String(command.account_type_changes?.name ?? '').trim()
+    const blocking: string[] = []
+    if (!candidates.length) blocking.push('tipe akun target')
+    if (command.intent === 'UPDATE_ACCOUNT_TYPE' && !newName) blocking.push('nama tipe akun baru')
+    const destructive = command.intent === 'DELETE_ACCOUNT_TYPE'
+    let message = candidates.length === 0
+      ? 'Tidak menemukan tipe akun yang cocok.'
+      : candidates.length === 1
+        ? destructive
+          ? `Tipe akun “${candidates[0].name}” akan dihapus dari pilihan. Akun lama tetap mempertahankan riwayat tipe tersebut.`
+          : `Tipe akun “${candidates[0].name}” akan diubah menjadi “${newName || 'nama yang belum jelas'}”.`
+        : `Ditemukan ${candidates.length} tipe akun yang cocok. Pilih satu.`
+    return {
+      intent: command.intent,
+      risk_level: destructive ? 'DESTRUCTIVE' : 'NORMAL',
+      requires_confirmation: true,
+      requires_typed_confirmation: false,
+      message,
+      can_commit: blocking.length === 0,
+      blocking_issues: blocking,
+      prepared: { new_account_type_name: newName || null },
+      candidates: candidates.map((t: any) => ({ ...t, entity_type: 'account_type', label: t.name })),
+      candidate_kind: 'account_type',
     }
   }
 

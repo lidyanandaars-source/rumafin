@@ -4,6 +4,8 @@ import {
   extractCreateAccountName,
   extractOpeningBalanceFromTranscript,
   inferAccountTypeFromTranscript,
+  extractExplicitAccountTypeHint,
+  intentRequiresOwnerAdmin,
   normalizeFinancialCandidate,
   validateFinancialCandidate,
 } from '../../supabase/functions/_shared/financial-command'
@@ -27,6 +29,9 @@ function baseCandidate(overrides: Record<string, unknown> = {}) {
     account_selector: null,
     account_changes: { name: null, opening_balance: null },
     account_type: null,
+    account_type_name: null,
+    account_type_selector: null,
+    account_type_changes: null,
     category_name: null,
     parent_category_hint: null,
     category_transaction_type: null,
@@ -87,7 +92,40 @@ describe('financial voice semantic guard', () => {
     ['Pindahkan 500 ribu dari BCA ke Cash', 'TRANSFER_MONEY'],
     ['Hapus transaksi Grab 42 ribu kemarin', 'DELETE_TRANSACTION'],
     ['Buat kategori Pets untuk pengeluaran', 'CREATE_CATEGORY'],
+    ['Buat tipe akun Crypto', 'CREATE_ACCOUNT_TYPE'],
+    ['Ubah tipe akun Crypto jadi Aset Digital', 'UPDATE_ACCOUNT_TYPE'],
+    ['Hapus tipe akun Aset Digital', 'DELETE_ACCOUNT_TYPE'],
   ])('routes %s to %s', (text, expected) => {
     expect(detectDeterministicIntent(text)).toBe(expected)
+  })
+
+
+  it('extracts an explicit custom account type for a new account', () => {
+    const text = 'Buat akun Binance tipe Crypto saldo 5 juta'
+    expect(extractExplicitAccountTypeHint(text)).toBe('Crypto')
+    const normalized = normalizeFinancialCandidate(baseCandidate(), text)
+    expect(normalized.account_hint).toBe('Binance')
+    expect(normalized.account_type).toBe('Crypto')
+    expect(normalized.account_changes.opening_balance).toBe(5_000_000)
+  })
+
+  it('marks account type administration as owner/admin only', () => {
+    expect(intentRequiresOwnerAdmin('CREATE_ACCOUNT_TYPE')).toBe(true)
+    expect(intentRequiresOwnerAdmin('UPDATE_ACCOUNT_TYPE')).toBe(true)
+    expect(intentRequiresOwnerAdmin('DELETE_ACCOUNT_TYPE')).toBe(true)
+    expect(intentRequiresOwnerAdmin('CREATE_TRANSACTION')).toBe(false)
+  })
+
+  it('normalizes custom account type administration fields', () => {
+    const create = normalizeFinancialCandidate(baseCandidate({ intent: 'CREATE_ACCOUNT_TYPE' }), 'Buat tipe akun Crypto')
+    expect(create.account_type_name).toBe('Crypto')
+    expect(() => validateFinancialCandidate(create, 'Buat tipe akun Crypto')).not.toThrow()
+
+    const rename = normalizeFinancialCandidate(baseCandidate({ intent: 'UPDATE_ACCOUNT_TYPE' }), 'Ubah tipe akun Crypto jadi Aset Digital')
+    expect(rename.account_type_selector.name).toBe('Crypto')
+    expect(rename.account_type_changes.name).toBe('Aset Digital')
+
+    const remove = normalizeFinancialCandidate(baseCandidate({ intent: 'DELETE_ACCOUNT_TYPE' }), 'Hapus tipe akun Aset Digital')
+    expect(remove.account_type_selector.name).toBe('Aset Digital')
   })
 })

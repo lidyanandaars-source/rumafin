@@ -72,6 +72,9 @@ SET_ACCOUNT_OPENING_BALANCE
 ARCHIVE_ACCOUNT
 DELETE_ACCOUNT_CASCADE
 RESET_ACCOUNT
+CREATE_ACCOUNT_TYPE
+UPDATE_ACCOUNT_TYPE
+DELETE_ACCOUNT_TYPE
 CREATE_CATEGORY
 RESET_HOUSEHOLD_FINANCES
 GET_FINANCIAL_SUMMARY
@@ -85,6 +88,8 @@ INTENT DISAMBIGUATION — ACCOUNT VS TRANSACTION:
 - For CREATE_ACCOUNT, put the new account name in account_hint. account_selector must be null because there is no existing account to select.
 - If the transcript clearly identifies the account type, set account_type. Examples: "Bank Mandiri" -> BANK, "GoPay ewallet" -> EWALLET, "Cash" -> CASH, "kartu kredit" -> CREDIT_CARD.
 - For UPDATE_ACCOUNT / SET_ACCOUNT_OPENING_BALANCE / ARCHIVE_ACCOUNT / DELETE_ACCOUNT_CASCADE / RESET_ACCOUNT, put the existing account name in account_selector.name.
+- Account types are household-configurable. Use CREATE_ACCOUNT_TYPE / UPDATE_ACCOUNT_TYPE / DELETE_ACCOUNT_TYPE only for explicit phrases such as 'buat tipe akun', 'ubah tipe akun', or 'hapus tipe akun'.
+- For CREATE_ACCOUNT, account_type may be a built-in alias (BANK, CASH, EWALLET, CREDIT_CARD, SAVINGS, OTHER) or an exact custom household type name supplied by the user.
 
 INDONESIAN AMOUNTS:
 85 ribu = 85000
@@ -133,6 +138,19 @@ ACCOUNT EXAMPLES:
 "reset akun Cash ke nol"
 => RESET_ACCOUNT, account_selector.name Cash.
 
+ACCOUNT TYPE EXAMPLES:
+"buat tipe akun Crypto"
+=> CREATE_ACCOUNT_TYPE, account_type_name Crypto.
+
+"ubah tipe akun Crypto jadi Aset Digital"
+=> UPDATE_ACCOUNT_TYPE, account_type_selector.name Crypto, account_type_changes.name Aset Digital.
+
+"hapus tipe akun Aset Digital"
+=> DELETE_ACCOUNT_TYPE, account_type_selector.name Aset Digital.
+
+"buat akun Binance tipe Crypto saldo 5 juta"
+=> CREATE_ACCOUNT, account_hint Binance, account_type Crypto, account_changes.opening_balance 5000000.
+
 SYSTEM EXAMPLE:
 "reset semua keuangan dari nol"
 => RESET_HOUSEHOLD_FINANCES.
@@ -170,13 +188,13 @@ Return JSON matching the supplied schema only.
         provider: 'groq',
         label: 'Groq primary',
         model: groqPrimary,
-        run: () => groqJson<any>({ model: groqPrimary, system, prompt: transcript, schema: financialCommandSchema, schemaName: 'financial_command_v3' }),
+        run: () => groqJson<any>({ model: groqPrimary, system, prompt: transcript, schema: financialCommandSchema, schemaName: 'financial_command_v4' }),
       },
       {
         provider: 'groq',
         label: 'Groq secondary',
         model: groqSecondary,
-        run: () => groqJson<any>({ model: groqSecondary, system, prompt: transcript, schema: financialCommandSchema, schemaName: 'financial_command_v3' }),
+        run: () => groqJson<any>({ model: groqSecondary, system, prompt: transcript, schema: financialCommandSchema, schemaName: 'financial_command_v4' }),
       },
       {
         provider: 'gemini',
@@ -237,8 +255,8 @@ Return JSON matching the supplied schema only.
       missingCreateAccountType ||
       highRiskIntents.has(parsed.intent)
 
-    const promptVersion = 'voice-intent-v6-semantic-guard'
-    const schemaVersion = 'v3'
+    const promptVersion = 'voice-intent-v7-custom-account-types'
+    const schemaVersion = 'v4'
 
     const { error: aiError } = await admin.from('ai_extractions').insert({
       household_id: householdId,

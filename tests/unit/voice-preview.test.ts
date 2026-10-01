@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import { buildPreview } from '../../supabase/functions/_shared/preview'
 
+function accountTypeAdmin() {
+  const rows = [{ id: 'type-bank', name: 'Bank', legacy_type: 'BANK', icon: null, color: null, is_system: true, deleted_at: null }]
+  const chain: any = {
+    select: () => chain,
+    eq: () => chain,
+    is: () => chain,
+    order: () => Promise.resolve({ data: rows, error: null }),
+  }
+  return { from: (table: string) => table === 'account_types' ? chain : (() => { throw new Error(`Unexpected table ${table}`) })() }
+}
+
 describe('voice preview safety', () => {
   it('does not convert missing transaction fields into Rp0, Cash, or Others', async () => {
     const preview = await buildPreview({}, 'household-id', {
@@ -23,7 +34,7 @@ describe('voice preview safety', () => {
   })
 
   it('builds a committable Bank Mandiri account preview with Rp10m opening balance', async () => {
-    const preview = await buildPreview({}, 'household-id', {
+    const preview = await buildPreview(accountTypeAdmin(), 'household-id', {
       intent: 'CREATE_ACCOUNT',
       account_hint: 'Bank Mandiri',
       account_type: 'BANK',
@@ -34,7 +45,17 @@ describe('voice preview safety', () => {
 
     expect(preview.can_commit).toBe(true)
     expect(preview.prepared?.account_name).toBe('Bank Mandiri')
-    expect(preview.prepared?.account_type).toBe('BANK')
+    expect(preview.prepared?.account_type).toBe('Bank')
+    expect(preview.prepared?.account_type_id).toBe('type-bank')
     expect(preview.prepared?.opening_balance).toBe(10_000_000)
+  })
+
+  it('previews creation of a custom account type', async () => {
+    const preview = await buildPreview({}, 'household-id', {
+      intent: 'CREATE_ACCOUNT_TYPE',
+      account_type_name: 'Crypto',
+    })
+    expect(preview.can_commit).toBe(true)
+    expect(preview.prepared?.account_type_name).toBe('Crypto')
   })
 })

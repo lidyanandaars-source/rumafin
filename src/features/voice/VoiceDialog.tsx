@@ -17,7 +17,7 @@ interface InterpretResult {
 
 interface VoiceCandidate {
   id: string
-  entity_type?: 'transaction' | 'account'
+  entity_type?: 'transaction' | 'account' | 'account_type'
   label?: string
   merchant_name?: string | null
   description?: string | null
@@ -40,7 +40,7 @@ interface PreviewResult {
   blocking_issues?: string[]
   requires_typed_confirmation?: boolean
   confirmation_phrase?: string | null
-  candidate_kind?: 'transaction' | 'account' | null
+  candidate_kind?: 'transaction' | 'account' | 'account_type' | null
   message: string
   prepared?: {
     total_amount?: number
@@ -48,6 +48,8 @@ interface PreviewResult {
     merchant_name?: string
     account_name?: string
     account_type?: string
+    account_type_name?: string
+    new_account_type_name?: string | null
     opening_balance?: number
     opening_balance_defaulted?: boolean
     category_name?: string
@@ -201,6 +203,7 @@ export function VoiceDialog({ open, onOpenChange }: { open: boolean; onOpenChang
         qc.invalidateQueries({ queryKey: ['transactions'] }),
         qc.invalidateQueries({ queryKey: ['dashboard'] }),
         qc.invalidateQueries({ queryKey: ['accounts'] }),
+        qc.invalidateQueries({ queryKey: ['account-types'] }),
         qc.invalidateQueries({ queryKey: ['categories'] }),
         qc.invalidateQueries({ queryKey: ['budgets'] }),
         qc.invalidateQueries({ queryKey: ['reports'] }),
@@ -255,7 +258,7 @@ export function VoiceDialog({ open, onOpenChange }: { open: boolean; onOpenChang
             {recording ? 'Sedang mendengarkan…' : busy ? 'Memproses…' : 'Tap untuk berbicara'}
           </p>
           <p className="mt-1 text-xs text-slate-400">
-            Contoh: “Ubah saldo awal BCA jadi 5 juta” atau “Pindahkan 500 ribu dari BCA ke Cash”.
+            Contoh: “Buat tipe akun Crypto”, “Buat akun Binance tipe Crypto saldo 5 juta”, atau “Pindahkan 500 ribu dari BCA ke Cash”.
           </p>
         </div>
 
@@ -320,6 +323,18 @@ export function VoiceDialog({ open, onOpenChange }: { open: boolean; onOpenChang
                     <dd className="font-semibold">{preview.prepared.account_type}</dd>
                   </div>
                 )}
+                {preview.prepared.account_type_name && (
+                  <div>
+                    <dt className="text-slate-400">Tipe akun baru</dt>
+                    <dd className="font-semibold">{preview.prepared.account_type_name}</dd>
+                  </div>
+                )}
+                {preview.prepared.new_account_type_name && (
+                  <div>
+                    <dt className="text-slate-400">Nama tipe baru</dt>
+                    <dd className="font-semibold">{preview.prepared.new_account_type_name}</dd>
+                  </div>
+                )}
                 {preview.prepared.opening_balance != null && (
                   <div>
                     <dt className="text-slate-400">Saldo awal</dt>
@@ -382,7 +397,9 @@ export function VoiceDialog({ open, onOpenChange }: { open: boolean; onOpenChang
                     ? `Ditemukan ${preview.candidates.length} kandidat. Pilih satu:`
                     : preview.candidate_kind === 'account'
                       ? 'Akun yang cocok:'
-                      : 'Transaksi yang cocok:'}
+                      : preview.candidate_kind === 'account_type'
+                        ? 'Tipe akun yang cocok:'
+                        : 'Transaksi yang cocok:'}
                 </p>
                 {preview.candidates.map((candidate) => (
                   <label
@@ -399,9 +416,9 @@ export function VoiceDialog({ open, onOpenChange }: { open: boolean; onOpenChang
                       <p className="truncate text-sm font-semibold">
                         {candidate.label || candidate.name || candidate.merchant_name || candidate.description || 'Kandidat'}
                       </p>
-                      {candidate.entity_type === 'account' || candidate.name ? (
+                      {candidate.entity_type === 'account' || candidate.entity_type === 'account_type' || candidate.name ? (
                         <p className="text-xs text-slate-500">
-                          {candidate.account_type || 'ACCOUNT'}
+                          {candidate.entity_type === 'account_type' ? 'TIPE AKUN' : (candidate.account_type || 'ACCOUNT')}
                           {candidate.current_balance != null ? ` · ${formatCurrency(candidate.current_balance)}` : ''}
                           {candidate.is_active === false ? ' · Diarsipkan' : ''}
                         </p>

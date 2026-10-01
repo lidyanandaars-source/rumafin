@@ -1,7 +1,7 @@
 import { corsHeaders, handleError, json } from '../_shared/http.ts'
 import { rateLimit, requireHouseholdAccess, requireUser } from '../_shared/supabase.ts'
 import { buildPreview } from '../_shared/preview.ts'
-import { normalizeFinancialCandidate, validateFinancialCandidate } from '../_shared/financial-command.ts'
+import { intentRequiresOwnerAdmin, normalizeFinancialCandidate, validateFinancialCandidate } from '../_shared/financial-command.ts'
 
 function n(v: any) {
   return v == null ? null : Number(v)
@@ -36,7 +36,7 @@ Deno.serve(async (req) => {
     const confirmationText = String(body.confirmation_text ?? '')
 
     if (!householdId || !commandId) throw new Error('household_id and command_id are required')
-    await requireHouseholdAccess(admin, authUser.id, householdId, true)
+    const role = await requireHouseholdAccess(admin, authUser.id, householdId, true)
 
     const { data: row, error } = await admin
       .from('voice_commands')
@@ -63,6 +63,9 @@ Deno.serve(async (req) => {
 
     const command = normalizeFinancialCandidate(row.parsed_payload, row.transcript)
     validateFinancialCandidate(command, row.transcript)
+    if (intentRequiresOwnerAdmin(command.intent) && !['OWNER', 'ADMIN'].includes(role)) {
+      throw new Error('Perintah ini hanya dapat dijalankan oleh owner/admin household.')
+    }
     const preview = await buildPreview(admin, householdId, command)
 
     if (preview.can_commit === false) {
@@ -249,13 +252,14 @@ Deno.serve(async (req) => {
       entityId = txId
     } else if (command.intent === 'CREATE_ACCOUNT') {
       const p = preview.prepared
-      if (!p?.account_name || !p.account_type) throw new Error('Account name and type are required.')
-      const { data, error: accountError } = await userClient.rpc('voice_create_account', {
+      if (!p?.account_name || !p.account_type_id) throw new Error('Account name and type are required.')
+      const { data, error: accountError } = await userClient.rpc('create_account_with_type', {
         p_household_id: householdId,
         p_name: p.account_name,
-        p_account_type: p.account_type,
+        p_account_type_id: p.account_type_id,
         p_currency: p.currency ?? 'IDR',
         p_opening_balance: Number(p.opening_balance ?? 0),
+        p_source: 'VOICE',
       })
       if (accountError) throw accountError
       entityType = 'account'
@@ -295,6 +299,43 @@ Deno.serve(async (req) => {
       }
 
       entityType = 'account'
+      entityId = target.id
+    } else if (command.intent === 'CREATE_ACCOUNT_TYPE') {
+      const name = String(preview.prepared?.account_type_name ?? '').trim()
+      if (!name) throw new Error('Account type name is required.')
+      const { data, error: typeError } = await userClient.rpc('create_account_type', {
+        p_household_id: householdId,
+        p_name: name,
+        p_icon: null,
+        p_color: null,
+        p_source: 'VOICE',
+      })
+      if (typeError) throw typeError
+      entityType = 'account_type'
+      entityId = String((data as any).id)
+    } else if (['UPDATE_ACCOUNT_TYPE', 'DELETE_ACCOUNT_TYPE'].includes(command.intent)) {
+      const target: any = pickCandidate(preview, selected)
+      const candidates = preview.candidates ?? []
+      if (!target) throw new Error(candidates.length ? 'Choose exactly one matching account type.' : 'No matching account type found.')
+      if (command.intent === 'DELETE_ACCOUNT_TYPE') {
+        const { error: typeError } = await userClient.rpc('delete_account_type', {
+          p_account_type_id: target.id,
+          p_source: 'VOICE',
+        })
+        if (typeError) throw typeError
+      } else {
+        const newName = String(preview.prepared?.new_account_type_name ?? '').trim()
+        if (!newName) throw new Error('New account type name is required.')
+        const { error: typeError } = await userClient.rpc('update_account_type', {
+          p_account_type_id: target.id,
+          p_name: newName,
+          p_icon: target.icon ?? null,
+          p_color: target.color ?? null,
+          p_source: 'VOICE',
+        })
+        if (typeError) throw typeError
+      }
+      entityType = 'account_type'
       entityId = target.id
     } else if (command.intent === 'CREATE_CATEGORY') {
       const p = preview.prepared
