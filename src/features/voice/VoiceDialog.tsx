@@ -246,7 +246,8 @@ export function VoiceDialog({ open, onOpenChange }: { open: boolean; onOpenChang
       : 'EXPENSE'
     if (p.parent_category_hint) {
       const matches = (categories.data ?? []).filter((category) => norm(category.name) === norm(p.parent_category_hint))
-      if (matches.length === 1) draft.parentCategoryId = matches[0].id
+      const parentCategory = matches.length === 1 ? matches[0] : undefined
+      if (parentCategory) draft.parentCategoryId = parentCategory.id
     }
     return draft
   }
