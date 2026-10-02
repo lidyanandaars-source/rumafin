@@ -129,7 +129,7 @@ async function findAccountTypeCandidates(admin: any, householdId: string, hint?:
 }
 
 const keywordMap: Array<[RegExp, string[]]> = [
-  [/makan|nasi|restoran|restaurant|bakmi|kopi|coffee|gofood|grabfood|delivery/i, ['food', 'restaurant', 'coffee', 'delivery']],
+  [/jajan|snack|snacks|cemilan|camilan|makan|nasi|restoran|restaurant|bakmi|kopi|coffee|gofood|grabfood|delivery/i, ['snacks', 'food', 'restaurant', 'coffee', 'delivery']],
   [/belanja|supermarket|indomaret|alfamart|grocer/i, ['groceries', 'food']],
   [/bensin|bbm|fuel|pertamina|shell/i, ['fuel', 'transport']],
   [/parkir|parking/i, ['parking']],
@@ -138,7 +138,7 @@ const keywordMap: Array<[RegExp, string[]]> = [
   [/listrik|pln/i, ['electricity', 'housing']],
   [/internet|wifi|indihome/i, ['internet', 'housing']],
   [/air|pdam/i, ['water', 'housing']],
-  [/popok|diaper/i, ['diapers', 'child']],
+  [/popok|diaper|diapers|pampers/i, ['diapers', 'child']],
   [/obat|dokter|hospital|clinic|kesehatan/i, ['healthcare']],
   [/gaji|salary/i, ['salary', 'income']],
   [/bonus/i, ['bonus', 'income']],

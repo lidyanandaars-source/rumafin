@@ -136,8 +136,8 @@ Deno.serve(async (req) => {
       .eq('is_archived', false)
 
     const categoryNames = (categories ?? []).map((category: any) => category.name).join(', ')
-    const system = `Extract a household purchase receipt into JSON. Never invent unreadable or missing values. If a value is unclear, return null with low confidence and needs_review=true. Dates must use YYYY-MM-DD. Monetary values are plain numbers without currency symbols. Never confuse cash paid, change, or subtotal with the final transaction total. For category_hint, choose one of the supplied household category names only when supported by the merchant/items; otherwise return null. Household categories: ${categoryNames || 'none'}.`
-    const prompt = 'Extract this receipt. Preserve uncertainty. Extract merchant, date, total, subtotal, tax, discount, payment method, category hint, and readable line items. Check subtotal + tax - discount against total when readable.'
+    const system = `Extract a household purchase receipt into JSON. Never invent unreadable or missing values. If a value is unclear, return null with low confidence and needs_review=true. Dates must use YYYY-MM-DD. Monetary values are plain numbers without currency symbols. Never confuse cash paid, change, or subtotal with the final transaction total. For receipt-level category_hint and EACH line item's category_hint, choose one of the supplied household category names only when the evidence supports it; otherwise return null. Categorize each line item independently: do not force all items into the same category just because they were bought at one merchant. Example: snacks/food can map to Food & Drinks (or a matching food subcategory) while diapers/pampers can map to Child/Diapers when those categories exist. Household categories: ${categoryNames || 'none'}.`
+    const prompt = 'Extract this receipt. Preserve uncertainty. Extract merchant, date, total, subtotal, tax, discount, payment method, receipt-level category hint, and readable line items. For every readable line item also provide its own category_hint. Check subtotal + tax - discount against total when readable.'
 
     const geminiPrimary = Deno.env.get('GEMINI_RECEIPT_MODEL') ?? 'gemini-3.8-flash'
     const qwenFallback = Deno.env.get('GROQ_RECEIPT_FALLBACK_MODEL') ?? 'qwen/qwen3.8-27b'
@@ -289,6 +289,14 @@ Deno.serve(async (req) => {
       x[key].confidence = safeConfidence(x[key].confidence)
       if (x[key].confidence < 0.7) x[key].needs_review = true
     }
+    for (const item of x.items) {
+      if (!item.category_hint || typeof item.category_hint !== 'object' || !('value' in item.category_hint)) {
+        item.category_hint = manualField()
+      }
+      item.category_hint.confidence = safeConfidence(item.category_hint.confidence)
+      if (item.category_hint.confidence < 0.7) item.category_hint.needs_review = true
+      item.confidence = safeConfidence(item.confidence)
+    }
 
     let arithmeticIssue = false
     if (x.subtotal.value != null && x.total.value != null) {
@@ -298,13 +306,31 @@ Deno.serve(async (req) => {
 
     const importantFields = ['merchant', 'transaction_date', 'total']
     const overall = Math.min(...importantFields.map((key) => safeConfidence(x[key].confidence)))
-    const needsReview = arithmeticIssue || overall < 0.9 || importantFields.some((key) => x[key].value == null || x[key].needs_review)
 
     const category = await matchCategory(admin, householdId, {
       category_hint: x.category_hint.value,
       merchant_hint: x.merchant.value,
       description: x.items.map((item: any) => item.name).filter(Boolean).join(' '),
     })
+
+    const itemSuggestions = await Promise.all(x.items.map(async (item: any) => {
+      const matched = await matchCategory(admin, householdId, {
+        category_hint: item.category_hint?.value ?? null,
+        merchant_hint: null,
+        description: item.name ?? null,
+      })
+      return {
+        ...item,
+        suggested_category_id: matched?.id ?? null,
+        suggested_category_name: matched?.name ?? null,
+        category_needs_review: !matched || Boolean(item.category_hint?.needs_review),
+      }
+    }))
+
+    const itemCategoryIssue = itemSuggestions.some((item: any) =>
+      item.total != null && Number(item.total) > 0 && (!item.suggested_category_id || item.category_needs_review),
+    )
+    const needsReview = arithmeticIssue || overall < 0.9 || importantFields.some((key) => x[key].value == null || x[key].needs_review) || itemCategoryIssue
 
     let account: any = null
     if (x.payment_method.value) {
@@ -370,8 +396,8 @@ Deno.serve(async (req) => {
 
     if (receiptError) throw receiptError
 
-    if (x.items.length) {
-      const rows = x.items.map((item: any, index: number) => ({
+    if (itemSuggestions.length) {
+      const rows = itemSuggestions.map((item: any, index: number) => ({
         receipt_id: receipt.id,
         line_no: index + 1,
         name: item.name,
@@ -379,6 +405,7 @@ Deno.serve(async (req) => {
         unit_price: item.unit_price,
         total: item.total,
         confidence: safeConfidence(item.confidence),
+        category_id: item.suggested_category_id,
       }))
       const { error: itemError } = await admin.from('receipt_items').insert(rows)
       if (itemError) throw itemError
@@ -412,6 +439,7 @@ Deno.serve(async (req) => {
 
     return json({
       ...x,
+      items: itemSuggestions,
       overall_confidence: overall,
       needs_review: needsReview,
       manual_entry_required: false,

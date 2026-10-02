@@ -34,6 +34,9 @@ Deno.serve(async (req) => {
         ? String(body.selected_transaction_id)
         : null
     const confirmationText = String(body.confirmation_text ?? '')
+    const manualOverride = body.manual_override && typeof body.manual_override === 'object' && !Array.isArray(body.manual_override)
+      ? body.manual_override
+      : null
 
     if (!householdId || !commandId) throw new Error('household_id and command_id are required')
     const role = await requireHouseholdAccess(admin, authUser.id, householdId, true)
@@ -68,7 +71,7 @@ Deno.serve(async (req) => {
     }
     const preview = await buildPreview(admin, householdId, command)
 
-    if (preview.can_commit === false) {
+    if (preview.can_commit === false && command.intent !== 'CREATE_TRANSACTION') {
       const issues = Array.isArray(preview.blocking_issues) && preview.blocking_issues.length
         ? `: ${preview.blocking_issues.join(', ')}`
         : ''
@@ -97,28 +100,62 @@ Deno.serve(async (req) => {
     let entityId: string | null = null
 
     if (command.intent === 'CREATE_TRANSACTION') {
-      const p = preview.prepared
-      if (!p?.total_amount || !p.account_id || !p.transaction_at) {
-        throw new Error('Command is incomplete. Please add the transaction manually.')
-      }
-      if (!p.category_id) throw new Error('Category is unclear. Please add the transaction manually.')
+      const p = preview.prepared ?? {}
+      const overrideAmount = manualOverride?.amount
+      const amount = overrideAmount !== undefined && overrideAmount !== null && String(overrideAmount).trim() !== ''
+        ? Number(overrideAmount)
+        : Number(p.total_amount)
+      const accountId = String(manualOverride?.account_id ?? p.account_id ?? '').trim()
+      const categoryId = String(manualOverride?.category_id ?? p.category_id ?? '').trim()
+      const hasDescriptionOverride = Boolean(manualOverride && Object.prototype.hasOwnProperty.call(manualOverride, 'description'))
+      const description = hasDescriptionOverride ? String(manualOverride.description ?? '').trim() || null : (command.description ?? null)
+      const transactionType = command.transaction_type ?? 'EXPENSE'
 
-      const amount = Number(p.total_amount)
-      const movement = command.transaction_type === 'INCOME' ? amount : -amount
+      if (!Number.isFinite(amount) || amount <= 0) throw new Error('Nominal wajib diisi dengan angka lebih dari 0.')
+      if (!accountId) throw new Error('Pilih akun sebelum menyimpan transaksi.')
+      if (!categoryId) throw new Error('Pilih kategori sebelum menyimpan transaksi.')
+      if (!p.transaction_at) throw new Error('Tanggal transaksi belum dapat ditentukan. Edit transcript lalu interpretasikan ulang.')
+
+      const [{ data: account, error: accountError }, { data: category, error: categoryError }] = await Promise.all([
+        admin
+          .from('accounts')
+          .select('id,household_id,is_active')
+          .eq('id', accountId)
+          .eq('household_id', householdId)
+          .maybeSingle(),
+        admin
+          .from('categories')
+          .select('id,household_id,is_archived,transaction_type')
+          .eq('id', categoryId)
+          .eq('household_id', householdId)
+          .maybeSingle(),
+      ])
+      if (accountError) throw accountError
+      if (categoryError) throw categoryError
+      if (!account || account.is_active === false) throw new Error('Akun tidak valid atau sudah diarsipkan.')
+      if (!category || category.is_archived) throw new Error('Kategori tidak valid atau sudah diarsipkan.')
+      if (transactionType === 'EXPENSE' && !['EXPENSE', 'BOTH'].includes(category.transaction_type)) {
+        throw new Error('Kategori yang dipilih tidak dapat digunakan untuk pengeluaran.')
+      }
+      if (transactionType === 'INCOME' && !['INCOME', 'BOTH'].includes(category.transaction_type)) {
+        throw new Error('Kategori yang dipilih tidak dapat digunakan untuk pemasukan.')
+      }
+
+      const movement = transactionType === 'INCOME' ? amount : -amount
       const payload = {
         household_id: householdId,
-        transaction_type: command.transaction_type ?? 'EXPENSE',
+        transaction_type: transactionType,
         transaction_at: p.transaction_at,
         timezone: 'Asia/Jakarta',
         merchant_name: command.merchant_hint ?? null,
-        description: command.description ?? null,
+        description,
         notes: null,
         total_amount: amount,
         currency: command.currency ?? 'IDR',
         source: 'VOICE',
         idempotency_key: row.idempotency_key,
-        splits: [{ category_id: p.category_id, amount, description: command.description ?? null }],
-        movements: [{ account_id: p.account_id, amount: movement }],
+        splits: [{ category_id: categoryId, amount, description }],
+        movements: [{ account_id: accountId, amount: movement }],
       }
       const { data, error: rpcError } = await userClient.rpc('create_financial_transaction', { p_payload: payload })
       if (rpcError) throw rpcError
@@ -382,6 +419,7 @@ Deno.serve(async (req) => {
         execution_transaction_id: txId,
         execution_entity_type: entityType,
         execution_entity_id: entityId,
+        manual_override: command.intent === 'CREATE_TRANSACTION' ? manualOverride : null,
       })
       .eq('id', commandId)
 
