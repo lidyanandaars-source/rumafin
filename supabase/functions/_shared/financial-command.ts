@@ -113,6 +113,7 @@ function parseNumericAmount(rawValue: string, rawUnit?: string | null): number |
 
 export function extractOpeningBalanceFromTranscript(transcript: string): number | null {
   const text = normalizeIndonesianText(transcript)
+  if (/\bsaldo(?:\s+awal)?(?:\s+(?:sebesar|senilai|jadi|menjadi|adalah))?\s+(?:nol|zero)\b/.test(text)) return 0
   const match = text.match(/\bsaldo(?:\s+awal)?(?:\s+(?:sebesar|senilai|jadi|menjadi|adalah))?\s+(?:rp\.?\s*)?([0-9][0-9.,]*)\s*(ribu|rb|k|juta|jt|miliar|milyar|m)?\b/)
   if (!match) return null
   return parseNumericAmount(match[1] ?? '', match[2] ?? '')
@@ -190,22 +191,22 @@ export function normalizeFinancialCandidate(candidate: any, transcript: string) 
   return normalized
 }
 
-export function validateFinancialCandidate(candidate: any, transcript: string) {
+export function validateFinancialCandidate(candidate: any, transcript: string, enforceDeterministicIntent = true) {
   if (!candidate || typeof candidate !== 'object') throw new Error('AI returned an invalid financial command object')
   if (typeof candidate.intent !== 'string' || !supportedIntentSet.has(candidate.intent)) throw new Error(`AI returned an unsupported intent: ${String(candidate.intent ?? '')}`)
   if (typeof candidate.confidence !== 'number' || !Number.isFinite(candidate.confidence)) throw new Error('AI returned invalid confidence')
   if (candidate.confidence < 0 || candidate.confidence > 1) throw new Error('AI confidence must be between 0 and 1')
 
-  const expectedIntent = detectDeterministicIntent(transcript)
+  const expectedIntent = enforceDeterministicIntent ? detectDeterministicIntent(transcript) : null
   if (expectedIntent && candidate.intent !== expectedIntent) throw new Error(`Semantic intent mismatch: expected ${expectedIntent}, received ${candidate.intent}`)
 
   switch (candidate.intent as FinancialIntent) {
     case 'CREATE_ACCOUNT': {
-      const name = String(candidate.account_hint ?? '').trim()
-      if (!name) throw new Error('CREATE_ACCOUNT requires an account name')
+      // CREATE intents are deliberately allowed to be incomplete. The preview UI
+      // exposes editable fields so the user can supply a missing name/type/balance
+      // before final confirmation instead of forcing another voice attempt.
       const opening = candidate.account_changes?.opening_balance
       if (opening != null && (typeof opening !== 'number' || !Number.isFinite(opening) || opening < 0)) throw new Error('CREATE_ACCOUNT opening balance is invalid')
-      if (transcriptMentionsOpeningBalance(transcript) && opening == null) throw new Error('CREATE_ACCOUNT transcript contains a balance but the AI did not extract it')
       break
     }
     case 'UPDATE_ACCOUNT':
@@ -224,7 +225,7 @@ export function validateFinancialCandidate(candidate: any, transcript: string) {
       if (!String(candidate.account_selector?.name ?? '').trim()) throw new Error(`${candidate.intent} requires account_selector.name`)
       break
     case 'CREATE_ACCOUNT_TYPE':
-      if (!String(candidate.account_type_name ?? '').trim()) throw new Error('CREATE_ACCOUNT_TYPE requires account_type_name')
+      // Missing name is completed manually in the confirmation UI.
       break
     case 'UPDATE_ACCOUNT_TYPE':
       if (!String(candidate.account_type_selector?.name ?? '').trim()) throw new Error('UPDATE_ACCOUNT_TYPE requires account_type_selector.name')
@@ -238,7 +239,7 @@ export function validateFinancialCandidate(candidate: any, transcript: string) {
       if (!String(candidate.source_account_hint ?? '').trim() || !String(candidate.destination_account_hint ?? '').trim()) throw new Error('TRANSFER_MONEY requires source and destination accounts')
       break
     case 'CREATE_CATEGORY':
-      if (!String(candidate.category_name ?? '').trim()) throw new Error('CREATE_CATEGORY requires category_name')
+      // Missing name/type/parent can be reviewed and edited manually before commit.
       break
     case 'CREATE_TRANSACTION':
       if (candidate.amount != null && (typeof candidate.amount !== 'number' || !Number.isFinite(candidate.amount) || candidate.amount <= 0)) throw new Error('CREATE_TRANSACTION amount must be positive when supplied')

@@ -54,6 +54,18 @@ export async function listTransactions(householdId: string, filters: Transaction
   return rows
 }
 
+
+export async function getTransactionById(id: string): Promise<Transaction> {
+  const client = requireSupabase()
+  const { data, error } = await client
+    .from('transactions')
+    .select('*,splits:transaction_splits(*,category:categories(id,name,color,icon)),movements:account_movements(*,account:accounts(id,name,account_type))')
+    .eq('id', id)
+    .single()
+  if (error) throw error
+  return data as unknown as Transaction
+}
+
 export async function createTransaction(input: TransactionWriteInput): Promise<Transaction> {
   const client = requireSupabase()
   const { data, error } = await client.rpc('create_financial_transaction', {

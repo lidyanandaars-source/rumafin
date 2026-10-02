@@ -114,6 +114,9 @@ Deno.serve(async (req) => {
     const householdId = String(body.household_id ?? '')
     const storagePath = String(body.storage_path ?? '')
     const mimeType = String(body.mime_type ?? '').split(';')[0].trim().toLowerCase()
+    const originalFilename = String(body.original_filename ?? '').replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 255) || null
+    const storedFilename = String(body.stored_filename ?? '').replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 255) || null
+    const captureSource = body.capture_source === 'CAMERA' ? 'CAMERA' : 'UPLOAD'
 
     if (!householdId || !storagePath) throw new Error('household_id and storage_path are required')
     await requireHouseholdAccess(admin, authUser.id, householdId, true)
@@ -128,6 +131,7 @@ Deno.serve(async (req) => {
     const { data: file, error: downloadError } = await admin.storage.from('receipts').download(storagePath)
     if (downloadError || !file) throw new Error('Receipt file could not be read')
     if (file.size > 10 * 1024 * 1024) throw new Error('Receipt exceeds 10 MB limit')
+    const fileSizeBytes = file.size
 
     const { data: categories } = await admin
       .from('categories')
@@ -233,6 +237,10 @@ Deno.serve(async (req) => {
           uploaded_by: authUser.id,
           storage_path: storagePath,
           mime_type: mimeType,
+          original_filename: originalFilename,
+          stored_filename: storedFilename,
+          file_size_bytes: fileSizeBytes,
+          capture_source: captureSource,
           extraction_status: 'FAILED',
           overall_confidence: 0,
         })
@@ -382,6 +390,10 @@ Deno.serve(async (req) => {
         uploaded_by: authUser.id,
         storage_path: storagePath,
         mime_type: mimeType,
+        original_filename: originalFilename,
+        stored_filename: storedFilename,
+        file_size_bytes: fileSizeBytes,
+        capture_source: captureSource,
         merchant: x.merchant.value,
         receipt_date: x.transaction_date.value,
         subtotal: x.subtotal.value,
@@ -427,15 +439,9 @@ Deno.serve(async (req) => {
     })
     if (aiError) throw aiError
 
-    const { data: pref } = await admin
-      .from('user_preferences')
-      .select('receipt_retention')
-      .eq('user_id', authUser.id)
-      .maybeSingle()
-
-    if (pref?.receipt_retention === 'DELETE_AFTER_EXTRACTION') {
-      await admin.storage.from('receipts').remove([storagePath])
-    }
+    // Receipt files are transaction evidence and are intentionally retained in
+    // the private receipts bucket. They can later be viewed/downloaded from the
+    // transaction detail screen. Do not delete the object after extraction.
 
     return json({
       ...x,

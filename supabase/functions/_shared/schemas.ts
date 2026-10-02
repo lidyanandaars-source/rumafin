@@ -142,6 +142,33 @@ export const financialCommandSchema = {
   ],
 } as const
 
+export const financialCommandBatchSchema = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    commands: {
+      type: 'array',
+      minItems: 1,
+      maxItems: 20,
+      description: 'Atomic commands in the exact order spoken by the user. One spoken instruction may contain multiple commands.',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          source_text: {
+            type: 'string',
+            minLength: 1,
+            description: 'The smallest faithful transcript span for this command. Preserve wording; inherit shared date/account context only when the grammar clearly applies to this item.',
+          },
+          command: financialCommandSchema,
+        },
+        required: ['source_text', 'command'],
+      },
+    },
+  },
+  required: ['commands'],
+} as const
+
 const field = (valueType: string) => ({
   type: 'object',
   additionalProperties: false,

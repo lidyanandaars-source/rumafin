@@ -110,7 +110,7 @@ export function AccountsPage() {
   return <main className="page">
     <div className="flex flex-wrap items-end justify-between gap-3">
       <div><h1 className="page-title">Akun</h1><p className="page-subtitle">Kelola rekening, saldo awal, dan tipe akun yang dapat dikustomisasi.</p></div>
-      {canManage && <div className="flex gap-2"><Button variant="outline" onClick={() => setTypesOpen(true)}><Settings2 className="h-4 w-4"/>Tipe akun</Button><Button onClick={() => setOpen(true)}><Plus className="h-4 w-4"/>Akun</Button></div>}
+      {canManage && <div className="flex w-full gap-2 sm:w-auto"><Button className="flex-1 sm:flex-none" variant="outline" onClick={() => setTypesOpen(true)}><Settings2 className="h-4 w-4"/>Tipe akun</Button><Button className="flex-1 sm:flex-none" onClick={() => setOpen(true)}><Plus className="h-4 w-4"/>Akun</Button></div>}
     </div>
 
     {query.isLoading ? <LoadingState/> : <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -131,7 +131,7 @@ export function AccountsPage() {
 
     <Dialog open={typesOpen} onOpenChange={setTypesOpen} title="Kelola tipe akun">
       <div className="space-y-3">
-        <div className="flex items-center justify-between gap-3"><p className="text-sm text-slate-500">Tipe dapat ditambah, diganti nama, atau dihapus dari pilihan. Akun lama tetap mempertahankan riwayatnya.</p><Button size="sm" onClick={() => openTypeEditor()}><Plus className="h-4 w-4"/>Tipe</Button></div>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><p className="text-sm text-slate-500">Tipe dapat ditambah, diganti nama, atau dihapus dari pilihan. Akun lama tetap mempertahankan riwayatnya.</p><Button className="w-full sm:w-auto" size="sm" onClick={() => openTypeEditor()}><Plus className="h-4 w-4"/>Tipe</Button></div>
         {types.isLoading ? <LoadingState/> : !types.data?.length ? <EmptyState title="Belum ada tipe akun" description="Tambahkan tipe akun pertama."/> : <div className="divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200">{types.data.map((t) => <div key={t.id} className="flex items-center gap-3 bg-white p-3"><div className="min-w-0 flex-1"><p className="font-semibold">{t.name}</p><p className="text-xs text-slate-400">{t.is_system ? 'Tipe bawaan' : 'Tipe kustom'} · kompatibilitas {t.legacy_type}</p></div><Button size="icon" variant="ghost" title="Edit tipe" onClick={() => openTypeEditor(t)}><Pencil className="h-4 w-4"/></Button><Button size="icon" variant="ghost" title="Hapus tipe" disabled={removeType.isPending} onClick={() => { if (window.confirm(`Hapus tipe akun “${t.name}” dari pilihan? Akun lama yang memakai tipe ini tetap tersimpan.`)) removeType.mutate(t.id) }}><Trash2 className="h-4 w-4 text-red-600"/></Button></div>)}</div>}
         {typeError && <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">{typeError}</p>}
       </div>

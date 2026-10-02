@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import ReactECharts from 'echarts-for-react'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowDownRight, ArrowUpRight, Wallet, PiggyBank, Plus, ChevronRight } from 'lucide-react'
@@ -8,6 +9,8 @@ import { currentMonthRange, formatDateId } from '@/utils/date'
 import { formatCurrency } from '@/utils/currency'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { LoadingState, EmptyState } from '@/components/ui/status'
+import type { Transaction } from '@/types/domain'
+import { TransactionDetailDialog } from '@/features/transactions/TransactionDetailDialog'
 
 const kpiMeta = [
   { key: 'income', label: 'Pemasukan', icon: ArrowUpRight },
@@ -18,6 +21,7 @@ const kpiMeta = [
 
 export function DashboardPage() {
   const { householdId, household } = useHousehold(); const range = currentMonthRange()
+  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null)
   const query = useQuery({ queryKey: ['dashboard', householdId, range.from, range.to], queryFn: () => getDashboardSummary(householdId!, range.from, range.to), enabled: Boolean(householdId) })
   const data = query.data
 
@@ -48,12 +52,13 @@ export function DashboardPage() {
     </section>
 
     <section className="mt-4 grid gap-4 xl:grid-cols-5">
-      <Card className="xl:col-span-3"><CardHeader className="flex flex-row items-center justify-between"><div><h2 className="font-bold">Transaksi terbaru</h2><p className="text-xs text-slate-500">Aktivitas household terbaru</p></div><Link className="text-sm font-semibold text-slate-700" to="/transactions">Lihat semua</Link></CardHeader><CardContent className="space-y-1">{data?.recent_transactions?.length ? data.recent_transactions.slice(0, 6).map((t) => <div key={t.id} className="flex items-center gap-3 border-t border-slate-100 py-3 first:border-0"><div className="grid h-10 w-10 place-items-center rounded-xl bg-slate-100 text-sm font-bold">{t.transaction_type === 'INCOME' ? '+' : t.transaction_type === 'TRANSFER' ? '↔' : '−'}</div><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{t.merchant_name || t.description || t.transaction_type}</p><p className="text-xs text-slate-400">{formatDateId(t.transaction_at)} · {t.source}</p></div><p className={`text-sm font-bold ${t.transaction_type === 'INCOME' ? 'text-emerald-600' : ''}`}>{t.transaction_type === 'INCOME' ? '+' : t.transaction_type === 'EXPENSE' ? '−' : ''}{formatCurrency(t.total_amount, t.currency)}</p></div>) : <EmptyState title="Belum ada transaksi" description="Tambahkan transaksi pertama Anda."/>}</CardContent></Card>
+      <Card className="xl:col-span-3"><CardHeader className="flex flex-row items-center justify-between"><div><h2 className="font-bold">Transaksi terbaru</h2><p className="text-xs text-slate-500">Aktivitas household terbaru</p></div><Link className="text-sm font-semibold text-slate-700" to="/transactions">Lihat semua</Link></CardHeader><CardContent className="space-y-1">{data?.recent_transactions?.length ? data.recent_transactions.slice(0, 6).map((t) => <button type="button" onClick={() => setSelectedTransaction(t)} key={t.id} className="flex w-full items-center gap-3 border-t border-slate-100 py-3 text-left transition hover:bg-slate-50 first:border-0"><div className="grid h-10 w-10 place-items-center rounded-xl bg-slate-100 text-sm font-bold">{t.transaction_type === 'INCOME' ? '+' : t.transaction_type === 'TRANSFER' ? '↔' : '−'}</div><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{t.merchant_name || t.description || t.transaction_type}</p><p className="text-xs text-slate-400">{formatDateId(t.transaction_at)} · {t.source}</p></div><p className={`text-sm font-bold ${t.transaction_type === 'INCOME' ? 'text-emerald-600' : ''}`}>{t.transaction_type === 'INCOME' ? '+' : t.transaction_type === 'EXPENSE' ? '−' : ''}{formatCurrency(t.total_amount, t.currency)}</p></button>) : <EmptyState title="Belum ada transaksi" description="Tambahkan transaksi pertama Anda."/>}</CardContent></Card>
       <Card className="xl:col-span-2"><CardHeader><h2 className="font-bold">Saldo akun</h2><p className="text-xs text-slate-500">Dihitung dari account movements</p></CardHeader><CardContent className="space-y-2">{data?.accounts?.map((a) => <Link to="/accounts" key={a.id} className="flex items-center gap-3 rounded-xl p-3 hover:bg-slate-50"><div className="grid h-10 w-10 place-items-center rounded-xl bg-slate-100"><Wallet className="h-5 w-5"/></div><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{a.name}</p><p className="text-xs text-slate-400">{a.account_type}</p></div><div className="text-right"><p className="text-sm font-bold">{formatCurrency(a.balance, a.currency)}</p></div><ChevronRight className="h-4 w-4 text-slate-300"/></Link>)}</CardContent></Card>
     </section>
 
     <section className="mt-4">
       <Card><CardHeader className="flex flex-row items-center justify-between"><div><h2 className="font-bold">Progress budget</h2><p className="text-xs text-slate-500">Realisasi kategori terhadap budget bulan berjalan</p></div><Link className="text-sm font-semibold text-slate-700" to="/budgets">Kelola budget</Link></CardHeader><CardContent>{data?.budgets?.length ? <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{data.budgets.slice(0, 6).map((b) => { const ratio = Math.max(0, Math.min(100, Number(b.ratio) || 0)); return <div key={b.category_id} className="rounded-xl border border-slate-100 p-4"><div className="flex items-center justify-between gap-3"><p className="truncate text-sm font-semibold">{b.category}</p><span className="text-xs font-semibold text-slate-500">{Number(b.ratio).toFixed(0)}%</span></div><p className="mt-2 text-sm text-slate-500">{formatCurrency(b.actual)} / {formatCurrency(b.budget)}</p><div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100"><div className={`h-full rounded-full ${ratio >= 100 ? 'bg-red-600' : ratio >= 90 ? 'bg-amber-500' : 'bg-slate-900'}`} style={{ width: `${ratio}%` }} /></div></div>})}</div> : <EmptyState title="Belum ada budget" description="Tambahkan budget kategori untuk memantau progress bulanan." />}</CardContent></Card>
     </section>
+    <TransactionDetailDialog transaction={selectedTransaction} open={Boolean(selectedTransaction)} onOpenChange={(value) => { if (!value) setSelectedTransaction(null) }} />
   </main>
 }

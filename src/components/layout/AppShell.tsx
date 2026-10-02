@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
-import { Home, List, Plus, BarChart3, Settings, WalletCards, Mic, ReceiptText, PenLine, Landmark, Tags, Target, Users, ChevronDown, LogOut } from 'lucide-react'
+import { Home, List, Plus, BarChart3, Settings, WalletCards, Mic, ReceiptText, PenLine, Landmark, Tags, Target, Users, ChevronDown, LogOut, Menu as MenuIcon } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { cn } from '@/utils/cn'
 import { useHousehold } from '@/hooks/useHousehold'
@@ -35,6 +35,7 @@ export function AppShell() {
   const [addOpen, setAddOpen] = useState(false)
   const [voiceOpen, setVoiceOpen] = useState(false)
   const [receiptOpen, setReceiptOpen] = useState(false)
+  const [moreOpen, setMoreOpen] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
 
   async function signOut() {
@@ -92,7 +93,7 @@ export function AppShell() {
         <NavItem to="/transactions" label="Transaksi" icon={List} mobile />
         <button aria-label="Tambah" onClick={() => setAddOpen(true)} className="-mt-5 flex w-16 flex-col items-center"><span className="grid h-14 w-14 place-items-center rounded-2xl bg-slate-950 text-white shadow-lg"><Plus className="h-7 w-7"/></span><span className="mt-1 text-[11px] font-semibold text-slate-950">Tambah</span></button>
         <NavItem to="/reports" label="Laporan" icon={BarChart3} mobile />
-        <NavItem to="/settings" label="Settings" icon={Settings} mobile />
+        <button aria-label="Menu lengkap" onClick={() => setMoreOpen(true)} className="flex flex-1 flex-col items-center gap-1 py-2 text-[11px] text-slate-500"><MenuIcon className="h-5 w-5" />Menu</button>
       </nav>
 
       <Dialog open={addOpen} onOpenChange={setAddOpen} title="Tambah pencatatan" description="Pilih cara paling cepat untuk transaksi ini.">
@@ -101,6 +102,33 @@ export function AppShell() {
           <button onClick={() => { setAddOpen(false); setReceiptOpen(true) }} className="rounded-2xl border border-slate-200 p-5 text-left hover:bg-slate-50"><ReceiptText className="mb-5 h-7 w-7"/><p className="font-semibold">Receipt</p><p className="mt-1 text-xs text-slate-500">Foto atau upload struk.</p></button>
           <button onClick={() => { setAddOpen(false); navigate('/transactions/new') }} className="rounded-2xl border border-slate-200 p-5 text-left hover:bg-slate-50"><PenLine className="mb-5 h-7 w-7"/><p className="font-semibold">Manual</p><p className="mt-1 text-xs text-slate-500">Isi form tanpa AI.</p></button>
         </div>
+      </Dialog>
+
+
+      <Dialog open={moreOpen} onOpenChange={setMoreOpen} title="Menu lengkap" description="Semua fitur desktop juga tersedia di tampilan HP.">
+        <div className="mb-4 rounded-2xl border border-slate-200 p-3">
+          <label className="field-label">Household aktif</label>
+          <div className="relative">
+            <select value={householdId ?? ''} onChange={(e) => setHouseholdId(e.target.value)} className="w-full appearance-none rounded-xl border border-slate-200 bg-white px-3 py-2.5 pr-9 text-sm font-semibold outline-none">
+              {(memberships ?? []).map((m) => <option key={m.household_id} value={m.household_id}>{m.household?.name ?? 'Household'}</option>)}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-3 top-3 h-4 w-4 text-slate-400" />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          {[
+            { to: '/accounts', label: 'Akun & tipe akun', description: 'Tambah akun, saldo awal, dan tipe akun.', icon: Landmark },
+            { to: '/categories', label: 'Kategori', description: 'Tambah kategori dan subkategori.', icon: Tags },
+            { to: '/budgets', label: 'Budget', description: 'Kelola budget rumah tangga.', icon: Target },
+            { to: '/reports', label: 'Laporan & ekspor', description: 'Lihat laporan serta ekspor Excel/Word.', icon: BarChart3 },
+            { to: '/members', label: 'Anggota', description: 'Kelola anggota household.', icon: Users },
+            { to: '/settings', label: 'Pengaturan', description: 'Privasi, audit, dan pengaturan aplikasi.', icon: Settings },
+          ].map((item) => {
+            const Icon = item.icon
+            return <button key={item.to} onClick={() => { setMoreOpen(false); navigate(item.to) }} className="rounded-2xl border border-slate-200 p-4 text-left hover:bg-slate-50"><Icon className="mb-4 h-6 w-6"/><p className="text-sm font-semibold">{item.label}</p><p className="mt-1 text-xs leading-5 text-slate-500">{item.description}</p></button>
+          })}
+        </div>
+        <Button variant="outline" className="mt-4 w-full" onClick={signOut} disabled={signingOut}><LogOut className="h-4 w-4"/>{signingOut ? 'Keluar…' : 'Logout'}</Button>
       </Dialog>
 
       <VoiceDialog open={voiceOpen} onOpenChange={setVoiceOpen} />

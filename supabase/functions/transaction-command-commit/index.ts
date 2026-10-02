@@ -71,7 +71,8 @@ Deno.serve(async (req) => {
     }
     const preview = await buildPreview(admin, householdId, command)
 
-    if (preview.can_commit === false && command.intent !== 'CREATE_TRANSACTION') {
+    const manuallyCompletableCreate = new Set(['CREATE_TRANSACTION', 'CREATE_ACCOUNT', 'CREATE_ACCOUNT_TYPE', 'CREATE_CATEGORY'])
+    if (preview.can_commit === false && !manuallyCompletableCreate.has(command.intent)) {
       const issues = Array.isArray(preview.blocking_issues) && preview.blocking_issues.length
         ? `: ${preview.blocking_issues.join(', ')}`
         : ''
@@ -288,14 +289,23 @@ Deno.serve(async (req) => {
       entityType = 'transaction'
       entityId = txId
     } else if (command.intent === 'CREATE_ACCOUNT') {
-      const p = preview.prepared
-      if (!p?.account_name || !p.account_type_id) throw new Error('Account name and type are required.')
+      const p = preview.prepared ?? {}
+      const hasNameOverride = Boolean(manualOverride && Object.prototype.hasOwnProperty.call(manualOverride, 'account_name'))
+      const hasTypeOverride = Boolean(manualOverride && Object.prototype.hasOwnProperty.call(manualOverride, 'account_type_id'))
+      const hasBalanceOverride = Boolean(manualOverride && Object.prototype.hasOwnProperty.call(manualOverride, 'opening_balance'))
+      const accountName = hasNameOverride ? String(manualOverride.account_name ?? '').trim() : String(p.account_name ?? '').trim()
+      const accountTypeId = hasTypeOverride ? String(manualOverride.account_type_id ?? '').trim() : String(p.account_type_id ?? '').trim()
+      const openingRaw = hasBalanceOverride ? manualOverride.opening_balance : (p.opening_balance ?? 0)
+      const openingBalance = Number(openingRaw)
+      if (!accountName) throw new Error('Nama akun wajib diisi sebelum menyimpan.')
+      if (!accountTypeId) throw new Error('Pilih tipe akun sebelum menyimpan.')
+      if (!Number.isFinite(openingBalance) || openingBalance < 0) throw new Error('Saldo awal harus berupa angka 0 atau lebih.')
       const { data, error: accountError } = await userClient.rpc('create_account_with_type', {
         p_household_id: householdId,
-        p_name: p.account_name,
-        p_account_type_id: p.account_type_id,
-        p_currency: p.currency ?? 'IDR',
-        p_opening_balance: Number(p.opening_balance ?? 0),
+        p_name: accountName,
+        p_account_type_id: accountTypeId,
+        p_currency: p.currency ?? command.currency ?? 'IDR',
+        p_opening_balance: openingBalance,
         p_source: 'VOICE',
       })
       if (accountError) throw accountError
@@ -338,8 +348,11 @@ Deno.serve(async (req) => {
       entityType = 'account'
       entityId = target.id
     } else if (command.intent === 'CREATE_ACCOUNT_TYPE') {
-      const name = String(preview.prepared?.account_type_name ?? '').trim()
-      if (!name) throw new Error('Account type name is required.')
+      const hasNameOverride = Boolean(manualOverride && Object.prototype.hasOwnProperty.call(manualOverride, 'account_type_name'))
+      const name = hasNameOverride
+        ? String(manualOverride.account_type_name ?? '').trim()
+        : String(preview.prepared?.account_type_name ?? '').trim()
+      if (!name) throw new Error('Nama tipe akun wajib diisi sebelum menyimpan.')
       const { data, error: typeError } = await userClient.rpc('create_account_type', {
         p_household_id: householdId,
         p_name: name,
@@ -375,10 +388,18 @@ Deno.serve(async (req) => {
       entityType = 'account_type'
       entityId = target.id
     } else if (command.intent === 'CREATE_CATEGORY') {
-      const p = preview.prepared
-      if (!p?.category_name) throw new Error('Category name is required.')
-      let parentId: string | null = null
-      if (p.parent_category_hint) {
+      const p = preview.prepared ?? {}
+      const hasNameOverride = Boolean(manualOverride && Object.prototype.hasOwnProperty.call(manualOverride, 'category_name'))
+      const hasTypeOverride = Boolean(manualOverride && Object.prototype.hasOwnProperty.call(manualOverride, 'category_transaction_type'))
+      const hasParentOverride = Boolean(manualOverride && Object.prototype.hasOwnProperty.call(manualOverride, 'parent_category_id'))
+      const categoryName = hasNameOverride ? String(manualOverride.category_name ?? '').trim() : String(p.category_name ?? '').trim()
+      const categoryTransactionType = hasTypeOverride
+        ? String(manualOverride.category_transaction_type ?? '').trim().toUpperCase()
+        : String(p.category_transaction_type ?? 'EXPENSE').trim().toUpperCase()
+      if (!categoryName) throw new Error('Nama kategori wajib diisi sebelum menyimpan.')
+      if (!['EXPENSE', 'INCOME', 'BOTH'].includes(categoryTransactionType)) throw new Error('Tipe kategori tidak valid.')
+      let parentId: string | null = hasParentOverride ? (String(manualOverride.parent_category_id ?? '').trim() || null) : null
+      if (!hasParentOverride && p.parent_category_hint) {
         const { data: parents, error: parentError } = await admin
           .from('categories')
           .select('id,name')
@@ -394,8 +415,8 @@ Deno.serve(async (req) => {
       }
       const { data, error: categoryError } = await userClient.rpc('voice_create_category', {
         p_household_id: householdId,
-        p_name: p.category_name,
-        p_transaction_type: p.category_transaction_type ?? 'EXPENSE',
+        p_name: categoryName,
+        p_transaction_type: categoryTransactionType,
         p_parent_id: parentId,
       })
       if (categoryError) throw categoryError
@@ -419,7 +440,7 @@ Deno.serve(async (req) => {
         execution_transaction_id: txId,
         execution_entity_type: entityType,
         execution_entity_id: entityId,
-        manual_override: command.intent === 'CREATE_TRANSACTION' ? manualOverride : null,
+        manual_override: ['CREATE_TRANSACTION', 'CREATE_ACCOUNT', 'CREATE_ACCOUNT_TYPE', 'CREATE_CATEGORY'].includes(command.intent) ? manualOverride : null,
       })
       .eq('id', commandId)
 

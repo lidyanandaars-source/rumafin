@@ -150,7 +150,7 @@ export function ReceiptDialog({ open, onOpenChange }: { open: boolean; onOpenCha
     onOpenChange(value)
   }
 
-  async function handleFile(file?: File) {
+  async function handleFile(file: File | undefined, captureSource: 'UPLOAD' | 'CAMERA') {
     if (!file || !householdId || !user) return
     if (!navigator.onLine) {
       setError('Receipt AI membutuhkan koneksi internet.')
@@ -184,6 +184,10 @@ export function ReceiptDialog({ open, onOpenChange }: { open: boolean; onOpenCha
         household_id: householdId,
         storage_path: path,
         mime_type: optimized.type,
+        original_filename: file.name,
+        stored_filename: optimized.name,
+        file_size_bytes: optimized.size,
+        capture_source: captureSource,
       })
 
       const usableItems: ReviewItem[] = result.items
@@ -331,7 +335,7 @@ export function ReceiptDialog({ open, onOpenChange }: { open: boolean; onOpenCha
                 type="file"
                 accept="image/jpeg,image/png,image/webp,application/pdf"
                 disabled={busy}
-                onChange={(event) => handleFile(event.target.files?.[0])}
+                onChange={(event) => handleFile(event.target.files?.[0], 'UPLOAD')}
               />
             </label>
 
@@ -352,7 +356,7 @@ export function ReceiptDialog({ open, onOpenChange }: { open: boolean; onOpenCha
                 accept="image/jpeg,image/png,image/webp"
                 capture="environment"
                 disabled={busy}
-                onChange={(event) => handleFile(event.target.files?.[0])}
+                onChange={(event) => handleFile(event.target.files?.[0], 'CAMERA')}
               />
             </label>
           </div>
