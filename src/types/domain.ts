@@ -221,6 +221,7 @@ export interface ReceiptExtraction {
     quantity: number | null
     unit_price: number | null
     total: number | null
+    category_hint: ReceiptField<string>
     confidence: number
   }>
 }

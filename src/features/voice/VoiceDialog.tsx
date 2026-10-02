@@ -1,13 +1,16 @@
 import { useRef, useState } from 'react'
 import { Mic, Square, LoaderCircle, CheckCircle2, AlertTriangle, ShieldAlert } from 'lucide-react'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Dialog } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input, Textarea } from '@/components/ui/input'
+import { Select } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { invokeEdge } from '@/lib/edge'
 import { useHousehold } from '@/hooks/useHousehold'
 import { formatCurrency } from '@/utils/currency'
+import { listAccounts } from '@/services/accounts'
+import { listCategories } from '@/services/categories'
 
 interface InterpretResult {
   command_id: string
@@ -44,6 +47,10 @@ interface PreviewResult {
   message: string
   prepared?: {
     total_amount?: number
+    account_id?: string
+    category_id?: string
+    transaction_type?: 'EXPENSE' | 'INCOME' | 'TRANSFER' | 'ADJUSTMENT'
+    currency?: string
     description?: string
     merchant_name?: string
     account_name?: string
@@ -82,6 +89,16 @@ interface PreviewResult {
 export function VoiceDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const { householdId } = useHousehold()
   const qc = useQueryClient()
+  const accounts = useQuery({
+    queryKey: ['accounts', householdId],
+    queryFn: () => listAccounts(householdId!),
+    enabled: open && Boolean(householdId),
+  })
+  const categories = useQuery({
+    queryKey: ['categories', householdId],
+    queryFn: () => listCategories(householdId!),
+    enabled: open && Boolean(householdId),
+  })
   const recorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
   const [recording, setRecording] = useState(false)
@@ -90,6 +107,7 @@ export function VoiceDialog({ open, onOpenChange }: { open: boolean; onOpenChang
   const [preview, setPreview] = useState<PreviewResult | null>(null)
   const [selected, setSelected] = useState<string | null>(null)
   const [confirmationText, setConfirmationText] = useState('')
+  const [voiceDraft, setVoiceDraft] = useState({ amount: '', accountId: '', categoryId: '', description: '' })
   const [error, setError] = useState<string | null>(null)
 
   function reset() {
@@ -99,6 +117,7 @@ export function VoiceDialog({ open, onOpenChange }: { open: boolean; onOpenChang
     setPreview(null)
     setSelected(null)
     setConfirmationText('')
+    setVoiceDraft({ amount: '', accountId: '', categoryId: '', description: '' })
     setError(null)
     chunksRef.current = []
   }
@@ -180,6 +199,16 @@ export function VoiceDialog({ open, onOpenChange }: { open: boolean; onOpenChang
         command_id: parsed.command_id,
       })
       setPreview(result)
+      if (result.intent === 'CREATE_TRANSACTION') {
+        setVoiceDraft({
+          amount: result.prepared?.total_amount != null ? String(result.prepared.total_amount) : '',
+          accountId: result.prepared?.account_id ?? '',
+          categoryId: result.prepared?.category_id ?? '',
+          description: result.prepared?.description ?? '',
+        })
+      } else {
+        setVoiceDraft({ amount: '', accountId: '', categoryId: '', description: '' })
+      }
       if (result.candidates?.length === 1) setSelected(result.candidates[0]!.id)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Perintah belum dapat dipahami.')
@@ -198,6 +227,14 @@ export function VoiceDialog({ open, onOpenChange }: { open: boolean; onOpenChang
         command_id: preview.command_id,
         selected_entity_id: selected,
         confirmation_text: confirmationText,
+        manual_override: preview.intent === 'CREATE_TRANSACTION'
+          ? {
+              amount: voiceDraft.amount,
+              account_id: voiceDraft.accountId,
+              category_id: voiceDraft.categoryId,
+              description: voiceDraft.description,
+            }
+          : undefined,
       })
       await Promise.all([
         qc.invalidateQueries({ queryKey: ['transactions'] }),
@@ -230,7 +267,17 @@ export function VoiceDialog({ open, onOpenChange }: { open: boolean; onOpenChang
   const typedConfirmationValid = !preview?.requires_typed_confirmation ||
     confirmationText.trim().toLocaleUpperCase('id-ID') ===
       String(effectiveConfirmationPhrase ?? '').trim().toLocaleUpperCase('id-ID')
-  const canCommit = preview?.can_commit !== false
+  const voiceAmount = Number(voiceDraft.amount)
+  const voiceCreateReady = preview?.intent === 'CREATE_TRANSACTION'
+    ? Number.isFinite(voiceAmount) && voiceAmount > 0 && Boolean(voiceDraft.accountId) && Boolean(voiceDraft.categoryId)
+    : true
+  const canCommit = preview?.intent === 'CREATE_TRANSACTION' ? voiceCreateReady : preview?.can_commit !== false
+  const voiceTransactionType = preview?.prepared?.transaction_type ?? 'EXPENSE'
+  const voiceCategories = categories.data?.filter((category) =>
+    voiceTransactionType === 'INCOME'
+      ? category.transaction_type !== 'EXPENSE'
+      : category.transaction_type !== 'INCOME',
+  ) ?? []
 
   return (
     <Dialog
@@ -303,7 +350,66 @@ export function VoiceDialog({ open, onOpenChange }: { open: boolean; onOpenChang
               </div>
             </div>
 
-            {preview.prepared && (
+            {preview.intent === 'CREATE_TRANSACTION' ? (
+              <div className="mt-4 space-y-4 rounded-2xl bg-slate-50 p-4">
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">Lengkapi dan finalisasi transaksi</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Hasil voice hanya menjadi isian awal. Akun, kategori, nominal, dan deskripsi dapat Anda koreksi sebelum transaksi disimpan.
+                  </p>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label>
+                    <span className="field-label">Nominal</span>
+                    <Input
+                      type="number"
+                      min="1"
+                      value={voiceDraft.amount}
+                      onChange={(event) => setVoiceDraft({ ...voiceDraft, amount: event.target.value })}
+                      placeholder="Masukkan nominal"
+                    />
+                    {voiceAmount > 0 && <p className="mt-1 text-xs text-slate-400">{formatCurrency(voiceAmount)}</p>}
+                  </label>
+                  <label>
+                    <span className="field-label">Akun</span>
+                    <Select
+                      value={voiceDraft.accountId}
+                      onChange={(event) => setVoiceDraft({ ...voiceDraft, accountId: event.target.value })}
+                    >
+                      <option value="">Pilih akun</option>
+                      {accounts.data?.filter((account) => account.is_active).map((account) => (
+                        <option key={account.id} value={account.id}>{account.name}</option>
+                      ))}
+                    </Select>
+                  </label>
+                  <label className="sm:col-span-2">
+                    <span className="field-label">Kategori</span>
+                    <Select
+                      value={voiceDraft.categoryId}
+                      onChange={(event) => setVoiceDraft({ ...voiceDraft, categoryId: event.target.value })}
+                    >
+                      <option value="">Pilih kategori</option>
+                      {voiceCategories.map((category) => (
+                        <option key={category.id} value={category.id}>{category.name}</option>
+                      ))}
+                    </Select>
+                  </label>
+                  <label className="sm:col-span-2">
+                    <span className="field-label">Deskripsi</span>
+                    <Textarea
+                      value={voiceDraft.description}
+                      onChange={(event) => setVoiceDraft({ ...voiceDraft, description: event.target.value })}
+                      placeholder="Deskripsi transaksi"
+                    />
+                  </label>
+                </div>
+                {preview.prepared?.transaction_at && (
+                  <p className="text-xs text-slate-500">
+                    Tanggal: {new Date(preview.prepared.transaction_at).toLocaleDateString('id-ID')}
+                  </p>
+                )}
+              </div>
+            ) : preview.prepared ? (
               <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
                 {preview.prepared.total_amount != null && (
                   <div>
@@ -381,12 +487,19 @@ export function VoiceDialog({ open, onOpenChange }: { open: boolean; onOpenChang
                   </div>
                 )}
               </dl>
-            )}
+            ) : null}
 
             {preview.can_commit === false && !!preview.blocking_issues?.length && (
               <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-                Perintah belum aman untuk dijalankan karena: <strong>{preview.blocking_issues.join(', ')}</strong>.
-                Edit transcript lalu pilih <strong>Interpretasi ulang</strong>, atau gunakan input manual.
+                {preview.intent === 'CREATE_TRANSACTION' ? (
+                  <>
+                    AI belum dapat menentukan: <strong>{preview.blocking_issues.join(', ')}</strong>. Lengkapi field tersebut pada form di atas; nominal dan deskripsi juga tetap dapat diedit sebelum disimpan.
+                  </>
+                ) : (
+                  <>
+                    Perintah memerlukan data tambahan: <strong>{preview.blocking_issues.join(', ')}</strong>. Edit transcript lalu pilih <strong>Interpretasi ulang</strong>.
+                  </>
+                )}
               </div>
             )}
 
