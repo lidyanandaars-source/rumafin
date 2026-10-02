@@ -109,6 +109,22 @@ describe('financial voice semantic guard', () => {
     expect(normalized.account_changes.opening_balance).toBe(5_000_000)
   })
 
+
+  it('extracts an explicit zero opening balance', () => {
+    expect(extractOpeningBalanceFromTranscript('Tambahkan akun emas saldo nol')).toBe(0)
+  })
+
+  it('allows incomplete CREATE commands to continue to manual review', () => {
+    const incompleteAccount = baseCandidate({ intent: 'CREATE_ACCOUNT', account_hint: 'Emas', account_type: null })
+    expect(() => validateFinancialCandidate(incompleteAccount, 'Tambahkan akun emas saldo nol')).not.toThrow()
+
+    const incompleteType = baseCandidate({ intent: 'CREATE_ACCOUNT_TYPE', account_type_name: null })
+    expect(() => validateFinancialCandidate(incompleteType, 'Buat tipe akun')).not.toThrow()
+
+    const incompleteCategory = baseCandidate({ intent: 'CREATE_CATEGORY', category_name: null })
+    expect(() => validateFinancialCandidate(incompleteCategory, 'Buat kategori')).not.toThrow()
+  })
+
   it('marks account type administration as owner/admin only', () => {
     expect(intentRequiresOwnerAdmin('CREATE_ACCOUNT_TYPE')).toBe(true)
     expect(intentRequiresOwnerAdmin('UPDATE_ACCOUNT_TYPE')).toBe(true)
